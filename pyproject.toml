@@ -1,16 +1,29 @@
 [project]
-name = "auto-prompt-opt"
+name = "acai"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
+authors = [
+    { name = "SK", email = "limsweekiat@gmail.com" }
+]
 requires-python = ">=3.12"
 dependencies = [
+    "click>=8.1.8",
     "dirtyjson>=1.0.8",
+    "fastapi>=0.115.8",
     "litellm>=1.61.13",
     "pydantic>=2.10.6",
     "python-dotenv>=1.0.1",
     "pyyaml>=6.0.2",
+    "uvicorn>=0.34.0",
 ]
+
+[project.scripts]
+acai = "acai.api:deploy"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [tool.uv]
 dev-dependencies = [
