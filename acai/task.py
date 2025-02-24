@@ -1,9 +1,7 @@
-import importlib
 import inspect
 import logging
 import re
 from pathlib import Path
-from typing import Callable
 
 import yaml
 from litellm import acompletion, token_counter
@@ -16,7 +14,8 @@ from acai.prompts import (
     USER_PROMPT,
 )
 from acai.providers import APIModel
-from acai.types import Field, Rule
+from acai.rule_utils import eval_rule_str
+from acai.types import Field
 
 logging.basicConfig()
 logger = logging.getLogger("acai.task")
@@ -82,7 +81,7 @@ class Task(BaseModel):
     inputs: list[Field] = []
     outputs: list[Field] = []
     demos: list[dict] = []
-    rules: list[Callable[[dict, dict], int | bool]] = []
+    rules: list[str] = []
     config_file: str = ""
 
     def __init__(
@@ -91,7 +90,7 @@ class Task(BaseModel):
         inputs: list[Field] = None,
         outputs: list[Field] = None,
         demos: list[dict] = None,
-        rules: list[Rule] = None,
+        rules: list[str] = None,
         config_file: str = "",
         **kwargs,
     ):
@@ -104,6 +103,7 @@ class Task(BaseModel):
             config_file=config_file,
         )
 
+    # TODO: Check for duplicate field name between inputs and outputs
     @classmethod
     def from_config(cls, config_file: str | Path):
         config_file = Path(config_file)
@@ -123,26 +123,28 @@ class Task(BaseModel):
             }
             for name, attr in config.get("outputs", {}).items()
         ]
-        rules = []
-        module = importlib.import_module("acai.rules")
-        for rule in config.get("rules", []):
-            fn_pattern = re.compile("^(?P<module>.*?)\\.(?P<fn>.*?)$")
-            match = fn_pattern.match(rule.strip())
-            if match:
-                module_name = match.groupdict().get("module")
-                fn_name = match.groupdict().get("fn")
-                module = importlib.import_module(module_name)
-                fn = getattr(module, fn_name)
-                rules.append(fn)
-            # fn_pattern = re.compile("acai\\.rules\\.(?P<fn>.*?)\\(?P<args>.*?)")
-            # match = fn_pattern.match(rule)
-            # if match:
-            #     module = importlib.import_module("acai.rules")
-            #     fn_name = match.groupdict().get("fn")
-            #     fn = getattr(module, fn_name)
-            #     args_str = match.groupdict().get("args")
-            #     # TODO: Better args/kwargs parsing
-        config["rules"] = rules
+        # rules = []
+        # module = importlib.import_module("acai.rules")
+        # for rule in config.get("rules", []):
+        #     print(rule)
+        #     fn_pattern = re.compile(
+        #         "^(?P<module>.*?)\\.(?P<fn>.*?)(\\((?P<args>.*)\\))?$", re.DOTALL
+        #     )
+        #     match = fn_pattern.match(rule.strip())
+        #     if match:
+        #         print(match.groupdict())
+        #         args_str = match.groupdict().get("args")
+        #         if args_str:
+        #             args = process_signature(args_str)
+        #             print(args)
+        #         quit()
+        #         module_name = match.groupdict().get("module")
+        #         fn_name = match.groupdict().get("fn")
+        #         module = importlib.import_module(module_name)
+        #         fn = getattr(module, fn_name)
+        #         rules.append(fn)
+        #     quit()
+        # config["rules"] = rules
 
         optimized_config_file = config_file.parent / (config_file.stem + ".optim.yaml")
         optimized_config = {}
@@ -327,16 +329,16 @@ class Task(BaseModel):
                 result = str(e)
                 logger.exception(e)
 
-        evals = [False] * len(self.rules)
-        inputs = kwargs
-        outputs = groupdict
         # Optimize against rules
-        if optimize and self.config_file and len(self.rules):
+        evals = [False] * len(self.rules)
+        if len(self.rules):
             logger.info("Evaluating rules")
             for i, rule in enumerate(self.rules, 1):
-                outcome = rule(inputs, outputs)
-                logger.info(f"Rule {i}: {rule.__name__} - {outcome}")
+                outcome = eval_rule_str(rule, result)
+                logger.info(f"Rule {i}: {rule} - {outcome}")
                 evals[i - 1] = outcome
+
+        if optimize and self.config_file and len(self.rules):
             if not all(evals):
                 new_task = await self.optimize([kwargs], num_prompts=1)
                 # TODO: Export more optimized params
@@ -491,6 +493,10 @@ async def get_prompts(task: Task, num_prompts: int = 5) -> list[str]:
             "task_description": task.desc,
             "input_schemas": [str(i) for i in task.inputs],
             "output_schemas": [str(i) for i in task.outputs],
+            # TODO: Need to handle source different for rules with and without args
+            # Current getsource only works with rules that do not have args i.e. takes in sample
+            # For rules with args e.g. acai.rules.contains(haiku, "green") we probably need to
+            # also pass the rule string
             "rules": [inspect.getsource(i) for i in task.rules],
             "num_prompts": num_prompts,
         }

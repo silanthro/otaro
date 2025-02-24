@@ -13,6 +13,7 @@ dependencies = [
     "fastapi>=0.115.8",
     "litellm>=1.61.13",
     "pydantic>=2.10.6",
+    "pyparsing>=3.2.1",
     "python-dotenv>=1.0.1",
     "pyyaml>=6.0.2",
     "uvicorn>=0.34.0",
