@@ -81,6 +81,7 @@ class Task(BaseModel):
     desc: str = ""
     inputs: list[Field] = []
     outputs: list[Field] = []
+    demos: list[dict] = []
     rules: list[Callable[[dict, dict], int | bool]] = []
     config_file: str = ""
 
@@ -89,6 +90,7 @@ class Task(BaseModel):
         desc: str = "",
         inputs: list[Field] = None,
         outputs: list[Field] = None,
+        demos: list[dict] = None,
         rules: list[Rule] = None,
         config_file: str = "",
         **kwargs,
@@ -97,6 +99,7 @@ class Task(BaseModel):
             desc=desc,
             inputs=inputs or [],
             outputs=outputs or [],
+            demos=demos or [],
             rules=rules or [],
             config_file=config_file,
         )
@@ -152,6 +155,7 @@ class Task(BaseModel):
                 if not optimized_config[attr]:
                     del optimized_config[attr]
         config.update(optimized_config)
+        logger.info(f"Config: {config}")
         return cls(config_file=str(config_file), **config)
 
     @property
@@ -162,7 +166,62 @@ class Task(BaseModel):
         else:
             return default_desc
 
-    async def run(self, optimize=True, **kwargs):
+    @property
+    def prompt_template(self):
+        input_fields = "\n".join(
+            [f"{i}. {field}" for i, field in enumerate(self.inputs, 1)]
+        )
+        output_fields = "\n".join(
+            ["1. `reasoning` (str)"]
+            + [f"{i}. {field}" for i, field in enumerate(self.outputs, 2)]
+        )
+        interaction_format = "\n\n".join(
+            [field.dummy_template for field in self.inputs]
+            + ["[[ ## reasoning ## ]]\n{reasoning}"]
+            + [field.dummy_template for field in self.outputs]
+        )
+        system_prompt = SYSTEM_PROMPT.format(
+            input_fields=input_fields,
+            output_fields=output_fields,
+            interaction_format=interaction_format,
+            objective=self.formatted_desc,
+        )
+
+        user_prompt = USER_PROMPT.format(
+            input_values="\n\n".join(field.dummy_template for field in self.inputs),
+            output_fields=", ".join(["reasoning"] + [f.name for f in self.outputs]),
+        )
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+        ]
+
+        for demo_kwargs in self.demos:
+            demo_user_prompt = USER_PROMPT.format(
+                input_values="\n\n".join(
+                    field.template(demo_kwargs[field.name]) for field in self.inputs
+                ),
+                output_fields=", ".join(["reasoning"] + [f.name for f in self.outputs]),
+            )
+            demo_assistant_prompt = (
+                "\n\n".join(
+                    field.template(demo_kwargs[field.name]) for field in self.outputs
+                )
+                + "\n\n[[ ## completed ## ]]\n"
+            )
+            if "reasoning" in demo_kwargs:
+                demo_assistant_prompt = (
+                    f"[[ ## reasoning ## ]]\n{demo_kwargs['reasoning']}\n\n"
+                    + demo_assistant_prompt
+                )
+            messages.append({"role": "user", "content": demo_user_prompt})
+            messages.append({"role": "assistant", "content": demo_assistant_prompt})
+
+        messages.append({"role": "user", "content": user_prompt})
+
+        return {"messages": messages}
+
+    def get_prompt(self, **kwargs):
         input_fields = "\n".join(
             [f"{i}. {field}" for i, field in enumerate(self.inputs, 1)]
         )
@@ -191,8 +250,35 @@ class Task(BaseModel):
 
         messages = [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
         ]
+
+        for demo_kwargs in self.demos:
+            demo_user_prompt = USER_PROMPT.format(
+                input_values="\n\n".join(
+                    field.template(demo_kwargs[field.name]) for field in self.inputs
+                ),
+                output_fields=", ".join(["reasoning"] + [f.name for f in self.outputs]),
+            )
+            demo_assistant_prompt = (
+                "\n\n".join(
+                    field.template(demo_kwargs[field.name]) for field in self.outputs
+                )
+                + "\n\n[[ ## completed ## ]]\n"
+            )
+            if "reasoning" in demo_kwargs:
+                demo_assistant_prompt = (
+                    f"[[ ## reasoning ## ]]\n{demo_kwargs['reasoning']}\n\n"
+                    + demo_assistant_prompt
+                )
+            messages.append({"role": "user", "content": demo_user_prompt})
+            messages.append({"role": "assistant", "content": demo_assistant_prompt})
+
+        messages.append({"role": "user", "content": user_prompt})
+
+        return {"messages": messages}
+
+    async def run(self, optimize=True, **kwargs):
+        messages = self.get_prompt(**kwargs).get("messages")
 
         response = await _completion(messages)
 
