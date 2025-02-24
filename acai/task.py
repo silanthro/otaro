@@ -1,5 +1,9 @@
+import importlib
+import inspect
 import logging
 import re
+from pathlib import Path
+from typing import Callable
 
 import yaml
 from litellm import acompletion, token_counter
@@ -77,7 +81,8 @@ class Task(BaseModel):
     desc: str = ""
     inputs: list[Field] = []
     outputs: list[Field] = []
-    rules: list[Rule] = []
+    rules: list[Callable[[dict, dict], int | bool]] = []
+    config_file: str = ""
 
     def __init__(
         self,
@@ -85,6 +90,7 @@ class Task(BaseModel):
         inputs: list[Field] = None,
         outputs: list[Field] = None,
         rules: list[Rule] = None,
+        config_file: str = "",
         **kwargs,
     ):
         super().__init__(
@@ -92,10 +98,12 @@ class Task(BaseModel):
             inputs=inputs or [],
             outputs=outputs or [],
             rules=rules or [],
+            config_file=config_file,
         )
 
     @classmethod
-    def from_config(cls, config_file: str):
+    def from_config(cls, config_file: str | Path):
+        config_file = Path(config_file)
         with open(config_file) as file:
             config = yaml.safe_load(file)
         config["inputs"] = [
@@ -112,7 +120,39 @@ class Task(BaseModel):
             }
             for name, attr in config.get("outputs", {}).items()
         ]
-        return cls(**config)
+        rules = []
+        module = importlib.import_module("acai.rules")
+        for rule in config.get("rules", []):
+            fn_pattern = re.compile("^(?P<module>.*?)\\.(?P<fn>.*?)$")
+            match = fn_pattern.match(rule.strip())
+            if match:
+                module_name = match.groupdict().get("module")
+                fn_name = match.groupdict().get("fn")
+                module = importlib.import_module(module_name)
+                fn = getattr(module, fn_name)
+                rules.append(fn)
+            # fn_pattern = re.compile("acai\\.rules\\.(?P<fn>.*?)\\(?P<args>.*?)")
+            # match = fn_pattern.match(rule)
+            # if match:
+            #     module = importlib.import_module("acai.rules")
+            #     fn_name = match.groupdict().get("fn")
+            #     fn = getattr(module, fn_name)
+            #     args_str = match.groupdict().get("args")
+            #     # TODO: Better args/kwargs parsing
+        config["rules"] = rules
+
+        optimized_config_file = config_file.parent / (config_file.stem + ".optim.yaml")
+        optimized_config = {}
+        if optimized_config_file.exists():
+            optimized_config = cls.from_config(optimized_config_file).model_dump(
+                mode="json"
+            )
+            del optimized_config["config_file"]
+            for attr in list(optimized_config.keys()):
+                if not optimized_config[attr]:
+                    del optimized_config[attr]
+        config.update(optimized_config)
+        return cls(config_file=str(config_file), **config)
 
     @property
     def formatted_desc(self):
@@ -122,7 +162,7 @@ class Task(BaseModel):
         else:
             return default_desc
 
-    async def run(self, evaluate=False, **kwargs):
+    async def run(self, optimize=True, **kwargs):
         input_fields = "\n".join(
             [f"{i}. {field}" for i, field in enumerate(self.inputs, 1)]
         )
@@ -202,32 +242,43 @@ class Task(BaseModel):
                 logger.exception(e)
 
         evals = [False] * len(self.rules)
-        if not isinstance(result, str):
-            # Evaluate result against rules
-            if evaluate and len(self.rules):
-                logger.info("Evaluating rules")
-                for i, rule in enumerate(self.rules, 1):
-                    outcome = rule.eval(result)
-                    logger.info(f"Rule {i}: {rule} - {outcome}")
-                    evals[i - 1] = outcome
+        inputs = kwargs
+        outputs = groupdict
+        # Optimize against rules
+        if optimize and self.config_file and len(self.rules):
+            logger.info("Evaluating rules")
+            for i, rule in enumerate(self.rules, 1):
+                outcome = rule(inputs, outputs)
+                logger.info(f"Rule {i}: {rule.__name__} - {outcome}")
+                evals[i - 1] = outcome
+            if not all(evals):
+                new_task = await self.optimize([kwargs], num_prompts=1)
+                # TODO: Export more optimized params
+                config_file = Path(self.config_file)
+                optimized_config_file = config_file.parent / (
+                    config_file.stem + ".optim.yaml"
+                )
+                with open(optimized_config_file, "w") as file:
+                    yaml.safe_dump(
+                        {
+                            "desc": new_task.desc,
+                        },
+                        file,
+                        default_flow_style=False,
+                    )
+                result = await new_task.run(**kwargs, optimize=False)
 
-        if evaluate:
-            return {
-                "result": result,
-                "evals": evals,
-            }
-        else:
-            return result
+        return result
 
     async def evaluate(self, data: list):
         total_score = 0
         num_evals = 0
         for sample in tqdm(data):
             try:
-                result = await self.run(**sample)
+                result = await self.run(**sample, optimize=False)
                 rule_evals = []
                 for rule in self.rules:
-                    rule_evals.append(rule.eval(result))
+                    rule_evals.append(rule(sample, result.model_dump(mode="json")))
                 if all(rule_evals):
                     total_score += 1.0
             except Exception as e:
@@ -235,7 +286,7 @@ class Task(BaseModel):
             num_evals += 1.0
         return total_score / num_evals
 
-    async def optimize(self, data: list, say=None):
+    async def optimize(self, data: list, say=None, num_prompts=5):
         def _log(message: str):
             if say:
                 say(message)
@@ -248,7 +299,7 @@ class Task(BaseModel):
         _log(f"Initial score: {initial_score}")
 
         # Get prompts
-        prompts = await get_prompts(self, num_prompts=5)
+        prompts = await get_prompts(self, num_prompts=num_prompts)
 
         # For each prompt, run evaluation
         # TODO: Add prompt-demo combination
@@ -350,15 +401,15 @@ async def get_prompts(task: Task, num_prompts: int = 5) -> list[str]:
 
     max_tries = 3
     for _ in range(max_tries):
-        result = await optim_task.run(
-            **{
-                "task_description": task.desc,
-                "input_schemas": [str(i) for i in task.inputs],
-                "output_schemas": [str(i) for i in task.outputs],
-                "rules": [str(i) for i in task.rules],
-                "num_prompts": num_prompts,
-            }
-        )
+        kwargs = {
+            "task_description": task.desc,
+            "input_schemas": [str(i) for i in task.inputs],
+            "output_schemas": [str(i) for i in task.outputs],
+            "rules": [inspect.getsource(i) for i in task.rules],
+            "num_prompts": num_prompts,
+        }
+        result = await optim_task.run(**kwargs, optimize=False)
+        logger.info(kwargs)
         logger.info(result.prompts)
         if not isinstance(result.prompts, str) and len(result.prompts) == num_prompts:
             break
