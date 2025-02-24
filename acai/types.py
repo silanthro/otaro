@@ -85,9 +85,15 @@ class Field(BaseModel):
         elif self._type == FieldType.ENUM:
             return f'{{"enum": {json.dumps(self.enum_members)}}}'
         elif self._type == FieldType.LIST:
-            if self.list_child_type._type in ["str", "float", "int"]:
+            # TODO: This should be recursive
+            if self.list_child_type._type in [
+                FieldType.STR,
+                FieldType.INT,
+                FieldType.FLOAT,
+                FieldType.BOOL,
+            ]:
                 return f'{{"items": {self.list_child_type._type}, "type": "array"}}'
-            if self.list_child_type._type == "enum":
+            if self.list_child_type._type == FieldType.ENUM:
                 return f'{{"items": {self.list_child_type.schema}, "type": "array"}}'
             else:
                 return f'{{"$defs": {{"{self.list_child_type.name.capitalize()}": {self.list_child_type.schema}}}, "items": {{"$ref": "#/$defs/{self.list_child_type.name.capitalize()}"}}, "type": "array"}}'
