@@ -9,7 +9,7 @@ from pydantic.fields import FieldInfo
 from acai.utils import llm_parse_json
 
 
-class FieldType(Enum):
+class FieldType(str, Enum):
     STR = "str"
     INT = "int"
     FLOAT = "float"
@@ -48,7 +48,10 @@ class Field(BaseModel):
         self.enum_members = enum_members or []
         self.enum_members = [m.strip() for m in self.enum_members]
         if list_child_type:
-            self.list_child_type = Field(**list_child_type)
+            if isinstance(list_child_type, Field):
+                self.list_child_type = list_child_type
+            else:
+                self.list_child_type = Field(**list_child_type)
         if object_attributes:
             self.object_attributes = [Field(**attr) for attr in object_attributes]
 
