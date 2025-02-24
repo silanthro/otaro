@@ -9,9 +9,19 @@ from pydantic.fields import FieldInfo
 from acai.utils import llm_parse_json
 
 
+class FieldType(Enum):
+    STR = "str"
+    INT = "int"
+    FLOAT = "float"
+    BOOL = "bool"
+    ENUM = "enum"
+    LIST = "list"
+    OBJECT = "object"
+
+
 class Field(BaseModel):
     name: str
-    _type: str
+    _type: FieldType
     desc: str = ""
     enum_members: Union[list[str], None] = None
     list_child_type: Union["Field", None] = None
@@ -20,7 +30,7 @@ class Field(BaseModel):
     def __init__(
         self,
         name: str,
-        type: str = "str",
+        type: FieldType = FieldType.STR,
         desc: str = "",
         enum_members: Union[list[str], None] = None,
         list_child_type: Union["Field", None] = None,
@@ -44,70 +54,78 @@ class Field(BaseModel):
 
     @property
     def model(self):
-        if self._type == "str":
+        if self._type == FieldType.STR:
             return str
-        elif self._type == "float":
-            return float
-        elif self._type == "int":
+        elif self._type == FieldType.INT:
             return int
-        elif self._type == "enum":
+        elif self._type == FieldType.FLOAT:
+            return float
+        elif self._type == FieldType.BOOL:
+            return bool
+        elif self._type == FieldType.ENUM:
             return Enum(self.name, [(str(v), v) for v in self.enum_members])
-        elif self._type == "object":
+        elif self._type == FieldType.LIST:
+            return list
+        elif self._type == FieldType.OBJECT:
             attributes = {}
             for attr in self.object_attributes:
                 attributes[attr.name] = (attr.model, FieldInfo())
             model = create_model(self.name, **attributes)
             return model
-        elif self._type == "list":
-            return list
-            return list[self.list_child_type.model]
 
     @property
     def schema(self):
-        if self._type in ["str", "float", "int"]:
+        if self._type in [
+            FieldType.STR,
+            FieldType.INT,
+            FieldType.FLOAT,
+            FieldType.BOOL,
+        ]:
             return self._type
-        elif self._type == "enum":
+        elif self._type == FieldType.ENUM:
             return f'{{"enum": {json.dumps(self.enum_members)}}}'
-        elif self._type == "object":
-            return json.dumps(self.model.model_json_schema())
-        elif self._type == "list":
+        elif self._type == FieldType.LIST:
             if self.list_child_type._type in ["str", "float", "int"]:
                 return f'{{"items": {self.list_child_type._type}, "type": "array"}}'
             if self.list_child_type._type == "enum":
                 return f'{{"items": {self.list_child_type.schema}, "type": "array"}}'
             else:
                 return f'{{"$defs": {{"{self.list_child_type.name.capitalize()}": {self.list_child_type.schema}}}, "items": {{"$ref": "#/$defs/{self.list_child_type.name.capitalize()}"}}, "type": "array"}}'
+        elif self._type == FieldType.OBJECT:
+            return json.dumps(self.model.model_json_schema())
 
     @property
     def dummy_value(self):
-        if self._type == "str":
+        if self._type == FieldType.STR:
             return "Foo"
-        elif self._type == "float":
-            return 3.14
-        elif self._type == "int":
+        elif self._type == FieldType.INT:
             return 42
-        elif self._type == "enum":
+        elif self._type == FieldType.FLOAT:
+            return 3.14
+        elif self._type == FieldType.BOOL:
+            return True
+        elif self._type == FieldType.ENUM:
             return self.enum_members[0]
-        elif self._type == "object":
+        elif self._type == FieldType.LIST:
+            return [self.list_child_type.dummy_value]
+        elif self._type == FieldType.OBJECT:
             attribute_values = {}
             for attr in self.object_attributes:
                 attribute_values[attr] = attr.dummy_value
             return self.model(**attribute_values)
-        elif self._type == "list":
-            return [self.list_child_type.dummy_value]
 
     def __str__(self):
         docstring = f"`{self.name}` ({self._type})"
         details = [
             self.desc + ("." if len(self.desc) and not self.desc.endswith(".") else "")
         ]
-        if self._type == "enum":
+        if self._type == FieldType.ENUM:
             details.append("Respond with one of the following enum values.")
             details.append(f"Enum Schema: {self.schema}")
-        if self._type in ["list", "object"]:
-            if self._type == "list":
+        if self._type in [FieldType.LIST, FieldType.OBJECT]:
+            if self._type == FieldType.LIST:
                 details.append("Respond with a single JSON array.")
-            elif self._type == "object":
+            elif self._type == FieldType.OBJECT:
                 details.append("Respond with a single JSON object.")
             details.append(f"JSON Schema: {self.schema}")
         details_str = " ".join(details)
@@ -126,18 +144,22 @@ class Field(BaseModel):
             return f"[[ ## {self.name} ## ]]\n{json.dumps(value)}"
 
     def parse(self, value: str):
-        if self._type == "str":
+        if self._type == FieldType.STR:
             return value
-        elif self._type == "float":
-            return float(value)
-        elif self._type == "int":
+        elif self._type == FieldType.INT:
             return int(value)
-        elif self._type == "enum":
+        elif self._type == FieldType.FLOAT:
+            return float(value)
+        elif self._type == FieldType.BOOL:
+            if value.lower() in ["false", "f", "no", "0", "null", "none", "undefined"]:
+                return False
+            return bool(value)
+        elif self._type == FieldType.ENUM:
             return self.model(value)
-        elif self._type == "list":
+        elif self._type == FieldType.LIST:
             value_json = llm_parse_json(value)
             return [self.list_child_type.parse(json.dumps(c)) for c in value_json]
-        elif self._type == "object":
+        elif self._type == FieldType.OBJECT:
             value_json = llm_parse_json(value)
             return self.model(**value_json)
 
