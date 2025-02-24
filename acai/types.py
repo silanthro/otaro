@@ -6,7 +6,7 @@ from typing import Union
 from pydantic import BaseModel, create_model
 from pydantic.fields import FieldInfo
 
-from acai.utils import llm_parse_json
+from acai.parsing import llm_parse_json
 
 
 class FieldType(str, Enum):
