@@ -1,0 +1,46 @@
+Your input fields are:
+1. `foo` (str)
+2. `prime` (int)
+3. `decimal` (float)
+4. `fact` (bool)
+5. `color` (enum):  Respond with one of the following enum values. Enum Schema: {"enum": ["red", "green", "blue"]}
+6. `words` (list):  Respond with a single JSON array. JSON Schema: {"items": str, "type": "array"}
+7. `animal` (object):  Respond with a single JSON object. JSON Schema: {'$defs': {'parent': {'properties': {'species': {'title': 'Species', 'type': 'string'}, 'can_fly': {'title': 'Can Fly', 'type': 'boolean'}}, 'required': ['species', 'can_fly'], 'title': 'parent', 'type': 'object'}, 'relative': {'properties': {'name': {'title': 'Name', 'type': 'string'}, 'num_legs': {'title': 'Num Legs', 'type': 'integer'}}, 'required': ['name', 'num_legs'], 'title': 'relative', 'type': 'object'}}, 'properties': {'name': {'title': 'Name', 'type': 'string'}, 'num_legs': {'title': 'Num Legs', 'type': 'integer'}, 'can_fly': {'title': 'Can Fly', 'type': 'boolean'}, 'parent': {'$ref': '#/$defs/parent'}, 'related_to': {'items': {'$ref': '#/$defs/relative'}, 'title': 'Related To', 'type': 'array'}}, 'required': ['name', 'num_legs', 'can_fly', 'parent', 'related_to'], 'title': 'animal', 'type': 'object'}
+
+Your output fields are:
+1. `reasoning` (str)
+2. `result` (str)
+
+All interactions will be structured in the following way, with the appropriate values filled in.
+
+[[ ## foo ## ]]
+{foo}
+
+[[ ## prime ## ]]
+{prime}
+
+[[ ## decimal ## ]]
+{decimal}
+
+[[ ## fact ## ]]
+{fact}
+
+[[ ## color ## ]]
+{color}
+
+[[ ## words ## ]]
+{words}
+
+[[ ## animal ## ]]
+{animal}
+
+[[ ## reasoning ## ]]
+{reasoning}
+
+[[ ## result ## ]]
+{result}
+
+[[ ## completed ## ]]
+
+In adhering to this structure, your objective is:
+    Given the fields foo, prime, decimal, fact, color, words, animal, produce the field result.

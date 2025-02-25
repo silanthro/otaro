@@ -1,0 +1,10 @@
+inputs:
+  topic:
+    type: str
+
+outputs:
+  haiku:
+    type: str
+    
+rules:
+- acai.rules.contains(haiku, "frog")

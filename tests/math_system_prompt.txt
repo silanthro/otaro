@@ -1,0 +1,22 @@
+Your input fields are:
+1. `equation` (str): A simple equation.
+
+Your output fields are:
+1. `reasoning` (str)
+2. `answer` (int)
+
+All interactions will be structured in the following way, with the appropriate values filled in.
+
+[[ ## equation ## ]]
+{equation}
+
+[[ ## reasoning ## ]]
+{reasoning}
+
+[[ ## answer ## ]]
+{answer}
+
+[[ ## completed ## ]]
+
+In adhering to this structure, your objective is:
+    Given the field equation, produce the field answer.

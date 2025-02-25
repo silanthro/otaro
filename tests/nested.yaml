@@ -1,0 +1,50 @@
+inputs:
+  foo:
+    type: str
+  prime:
+    type: int
+  decimal:
+    type: float
+  fact:
+    type: bool
+  color:
+    type: enum
+    enum_members:
+      - red
+      - green
+      - blue
+  words:
+    type: list
+    list_child_type:
+      word:
+        type: str
+  animal:
+    type: object
+    object_attributes:
+      name:
+        type: str
+      num_legs:
+        type: int
+      can_fly:
+        type: bool
+      parent:
+        type: object
+        object_attributes:
+          species:
+            type: str
+          can_fly:
+            type: bool
+      related_to:
+        type: list
+        list_child_type:
+          relative:
+            type: object
+            object_attributes:
+              name:
+                type: str
+              num_legs:
+                type: int
+
+outputs:
+  result:
+    type: str
