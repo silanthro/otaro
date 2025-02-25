@@ -46,10 +46,10 @@ def count_tokens(
 
 
 async def _completion(
+    model: str,
     messages: list[dict],
-    model: str | None = None,
 ):
-    model = model or APIModel.DEFAULT
+    model = model
     response = await acompletion(
         model=model,
         messages=messages,
@@ -78,27 +78,30 @@ async def _completion(
 
 
 class Task(BaseModel):
+    model: str
+    inputs: list[Field]
+    outputs: list[Field]
     desc: str = ""
-    inputs: list[Field] = []
-    outputs: list[Field] = []
     demos: list[dict] = []
     rules: list[str] = []
-    config_file: str = ""
+    config_file: str | None = None
 
     def __init__(
         self,
+        model: str,
+        inputs: list[Field],
+        outputs: list[Field],
         desc: str = "",
-        inputs: list[Field] = None,
-        outputs: list[Field] = None,
-        demos: list[dict] = None,
-        rules: list[str] = None,
-        config_file: str = "",
+        demos: list[dict] | None = None,
+        rules: list[str] | None = None,
+        config_file: str | None = None,
         **kwargs,
     ):
         super().__init__(
-            desc=desc,
+            model=model,
             inputs=inputs or [],
             outputs=outputs or [],
+            desc=desc,
             demos=demos or [],
             rules=rules or [],
             config_file=config_file,
@@ -138,13 +141,15 @@ class Task(BaseModel):
         optimized_config_file = config_file.parent / (config_file.stem + ".optim.yaml")
         optimized_config = {}
         if optimized_config_file.exists():
-            optimized_config = cls.from_config(optimized_config_file).model_dump(
-                mode="json"
-            )
-            del optimized_config["config_file"]
-            for attr in list(optimized_config.keys()):
-                if not optimized_config[attr]:
-                    del optimized_config[attr]
+            with open(optimized_config_file) as file:
+                optimized_config = yaml.safe_load(file)
+            # optimized_config = cls.from_config(optimized_config_file).model_dump(
+            #     mode="json"
+            # )
+            # del optimized_config["config_file"]
+            # for attr in list(optimized_config.keys()):
+            #     if not optimized_config[attr]:
+            #         del optimized_config[attr]
         config.update(optimized_config)
         # logger.info(f"Config: {config}")
         return cls(config_file=str(config_file), **config)
@@ -286,7 +291,7 @@ class Task(BaseModel):
         num_tries = 3
 
         for _ in range(num_tries):
-            response = await _completion(messages)
+            response = await _completion(model=self.model, messages=messages)
 
             output_field_names = ["reasoning"] + [field.name for field in self.outputs]
             rgx_patterns = [
@@ -443,8 +448,11 @@ class Task(BaseModel):
 
 
 # TODO: Suggest prompts based on successful and unsuccessful examples
-async def get_prompts(task: Task, num_prompts: int = 5) -> list[str]:
+async def get_prompts(
+    task: Task, model: str | None = None, num_prompts: int = 5
+) -> list[str]:
     optim_task = Task(
+        model=model or task.model,
         desc=(
             "An LLM needs to be prompted to accomplish the described task. "
             "The LLM's output has to fulfill all of the rules provided. "

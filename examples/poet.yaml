@@ -1,5 +1,7 @@
 # A sample config for a haiku writing task
 
+model: gemini/gemini-2.0-flash-001
+
 inputs:
   topic:
     type: str
