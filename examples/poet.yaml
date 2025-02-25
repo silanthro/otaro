@@ -1,0 +1,22 @@
+# A sample config for a haiku writing task
+
+inputs:
+  topic:
+    type: str
+
+outputs:
+  haiku:
+    type: str
+
+# Optional examples as demos
+demos:
+  - topic: "frog"
+    haiku: "Green skin, blue pond reflects,\nA croaking song fills the air,\nSummer's gentle kiss."
+  - topic: "penguin"
+    haiku: "Black and white they stand,\nGreen ice, blue ocean surround,\nWaddling, they dive deep."
+
+rules:
+  # Make sure that the haiku contains "green" and "blue"
+  - acai.rules.contains(haiku, "green")
+  - examples.custom_rules.haiku_contains_green # This does the same thing as the first rule
+  - examples.custom_rules.haiku_contains_blue

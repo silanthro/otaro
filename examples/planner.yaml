@@ -1,0 +1,24 @@
+# Sample config for a planning task
+
+inputs:
+  task:
+    type: str
+
+outputs:
+  plan:
+    type: list
+    list_child_type:
+      step:
+        type: object
+        object_attributes:
+          number:
+            type: int
+          desc:
+            type: str
+          status:
+            type: enum
+            enum_members:
+              - todo
+              - pending
+              - completed
+              - failed

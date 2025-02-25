@@ -1,8 +1,0 @@
-inputs:
-  # Topic for the haiku
-  topic:
-    type: str
-
-outputs:
-  haiku:
-    type: str
