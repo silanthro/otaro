@@ -13,7 +13,6 @@ from otaro.prompts import (
     SYSTEM_PROMPT,
     USER_PROMPT,
 )
-from otaro.providers import APIModel
 from otaro.rule_utils import eval_rule_str, get_rule_source
 from otaro.task_utils import parse_fields_config
 from otaro.types import Field
@@ -35,7 +34,7 @@ def count_tokens(
     model: str | None = None,
 ):
     return token_counter(
-        model=model or APIModel.DEFAULT,
+        model=model,
         messages=[
             {
                 "role": role,
