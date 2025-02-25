@@ -44,4 +44,6 @@ select = ["E4", "E7", "E9", "F", "B", "I"]
 unfixable = ["B"]
 
 [tool.pytest.ini_options]
+asyncio_default_fixture_loop_scope = "function"
+asyncio_mode = "auto"
 log_cli = "True"
