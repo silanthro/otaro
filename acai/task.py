@@ -1,4 +1,4 @@
-import inspect
+import asyncio
 import logging
 import re
 from pathlib import Path
@@ -14,7 +14,8 @@ from acai.prompts import (
     USER_PROMPT,
 )
 from acai.providers import APIModel
-from acai.rule_utils import eval_rule_str
+from acai.rule_utils import eval_rule_str, get_rule_source
+from acai.task_utils import parse_fields_config
 from acai.types import Field
 
 logging.basicConfig()
@@ -109,20 +110,8 @@ class Task(BaseModel):
         config_file = Path(config_file)
         with open(config_file) as file:
             config = yaml.safe_load(file)
-        config["inputs"] = [
-            {
-                "name": name,
-                **(attr if attr else {}),
-            }
-            for name, attr in config.get("inputs", {}).items()
-        ]
-        config["outputs"] = [
-            {
-                "name": name,
-                **(attr if attr else {}),
-            }
-            for name, attr in config.get("outputs", {}).items()
-        ]
+        config["inputs"] = parse_fields_config(config.get("inputs", {}))
+        config["outputs"] = parse_fields_config(config.get("outputs", {}))
         # rules = []
         # module = importlib.import_module("acai.rules")
         # for rule in config.get("rules", []):
@@ -167,6 +156,13 @@ class Task(BaseModel):
             return f"{self.desc} {default_desc}"
         else:
             return default_desc
+
+    @property
+    def dummy_input(self):
+        dummy_inputs = {}
+        for input_field in self.inputs:
+            dummy_inputs[input_field.name] = input_field.dummy_value
+        return dummy_inputs
 
     @property
     def prompt_template(self):
@@ -279,98 +275,111 @@ class Task(BaseModel):
 
         return {"messages": messages}
 
-    async def run(self, optimize=True, **kwargs):
+    def run(self, optimize=True, **kwargs):
+        loop = asyncio.get_event_loop()
+        return loop.run_until_complete(self.arun(optimize, **kwargs))
+
+    async def arun(self, optimize=True, **kwargs):
         messages = self.get_prompt(**kwargs).get("messages")
+        result = None
 
-        response = await _completion(messages)
+        num_tries = 3
 
-        output_field_names = ["reasoning"] + [field.name for field in self.outputs]
-        rgx_patterns = [
-            f"\\[\\[ #?#? ?{field_name} #?#? ?\\]\\](?P<{field_name}>.*?)"
-            for field_name in output_field_names
-        ]
-        rgx_pattern = (
-            ".*?" + "".join(rgx_patterns) + "\\[\\[ #?#? ?completed #?#? ?\\]\\]"
-        )
+        for _ in range(num_tries):
+            response = await _completion(messages)
 
-        rgx = re.compile(rgx_pattern, re.DOTALL)
+            output_field_names = ["reasoning"] + [field.name for field in self.outputs]
+            rgx_patterns = [
+                f"\\[\\[ #?#? ?{field_name} #?#? ?\\]\\](?P<{field_name}>.*?)"
+                for field_name in output_field_names
+            ]
+            rgx_pattern = (
+                ".*?" + "".join(rgx_patterns) + "\\[\\[ #?#? ?completed #?#? ?\\]\\]"
+            )
 
-        match = rgx.match(response.content)
-        if match is None:
-            print(f"No match on {response.content}")
-        else:
-            try:
-                input_field_attributes = {}
-                for field in self.inputs:
-                    input_field_attributes[field.name] = (field.model, FieldInfo())
-                output_field_attributes = {}
-                for field in self.outputs:
-                    output_field_attributes[field.name] = (field.model, FieldInfo())
-                model = create_model(
-                    "Output",
-                    reasoning=(str, FieldInfo()),
-                    **output_field_attributes,
-                    **input_field_attributes,
-                    num_input_tokens=(int, FieldInfo()),
-                    num_output_tokens=(int, FieldInfo()),
-                )
-                groupdict = {
-                    "num_input_tokens": response.num_input_tokens,
-                    "num_output_tokens": response.num_output_tokens,
-                }
-                for k, v in match.groupdict().items():
-                    if k == "reasoning":
-                        output_field = str
-                    else:
-                        output_field = [o for o in self.outputs if o.name == k][0]
-                    groupdict[k] = output_field(v.strip())
-                result = model(**groupdict, **kwargs)
-            except Exception as e:
-                result = str(e)
-                logger.exception(e)
+            rgx = re.compile(rgx_pattern, re.DOTALL)
 
-        # Optimize against rules
-        evals = [False] * len(self.rules)
-        if len(self.rules):
-            logger.info("Evaluating rules")
-            for i, rule in enumerate(self.rules, 1):
-                outcome = eval_rule_str(rule, result)
-                logger.info(f"Rule {i}: {rule} - {outcome}")
-                evals[i - 1] = outcome
-
-        if optimize and self.config_file and len(self.rules):
-            if not all(evals):
-                new_task = await self.optimize([kwargs], num_prompts=1)
-                # TODO: Export more optimized params
-                config_file = Path(self.config_file)
-                optimized_config_file = config_file.parent / (
-                    config_file.stem + ".optim.yaml"
-                )
-                with open(optimized_config_file, "w") as file:
-                    yaml.safe_dump(
-                        {
-                            "desc": new_task.desc,
-                        },
-                        file,
-                        default_flow_style=False,
+            match = rgx.match(response.content)
+            if match is None:
+                logger.warning(f"No match on {response.content}")
+            else:
+                try:
+                    input_field_attributes = {}
+                    for field in self.inputs:
+                        input_field_attributes[field.name] = (field.model, FieldInfo())
+                    output_field_attributes = {}
+                    for field in self.outputs:
+                        output_field_attributes[field.name] = (field.model, FieldInfo())
+                    model = create_model(
+                        "Output",
+                        reasoning=(str, FieldInfo()),
+                        **output_field_attributes,
+                        **input_field_attributes,
+                        num_input_tokens=(int, FieldInfo()),
+                        num_output_tokens=(int, FieldInfo()),
                     )
-                result = await new_task.run(**kwargs, optimize=False)
+                    groupdict = {
+                        "num_input_tokens": response.num_input_tokens,
+                        "num_output_tokens": response.num_output_tokens,
+                    }
+                    for k, v in match.groupdict().items():
+                        if k == "reasoning":
+                            output_field = str
+                        else:
+                            output_field = [o for o in self.outputs if o.name == k][0]
+                        groupdict[k] = output_field(v.strip())
+                    result = model(**groupdict, **kwargs)
+                except Exception as e:
+                    result = str(e)
+                    logger.exception(e)
 
-        return result
+                # Optimize against rules
+                evals = [False] * len(self.rules)
+                if len(self.rules):
+                    logger.info("Evaluating rules")
+                    for i, rule in enumerate(self.rules, 1):
+                        outcome = eval_rule_str(rule, result)
+                        logger.info(f"Rule {i}: {rule} - {outcome}")
+                        evals[i - 1] = outcome
+
+                if optimize and self.config_file and len(self.rules):
+                    if not all(evals):
+                        new_task = await self.optimize([kwargs], num_prompts=1)
+                        # TODO: Export more optimized params
+                        config_file = Path(self.config_file)
+                        optimized_config_file = config_file.parent / (
+                            config_file.stem + ".optim.yaml"
+                        )
+                        with open(optimized_config_file, "w") as file:
+                            yaml.safe_dump(
+                                {
+                                    "desc": new_task.desc,
+                                },
+                                file,
+                                default_flow_style=False,
+                            )
+                        result = await new_task.arun(**kwargs, optimize=False)
+                        # Update to optimized task
+                        self.sync_to(new_task)
+
+                return result
+
+        raise ValueError("Unable to generate valid response")
 
     async def evaluate(self, data: list):
         total_score = 0
         num_evals = 0
         for sample in tqdm(data):
             try:
-                result = await self.run(**sample, optimize=False)
+                result = await self.arun(**sample, optimize=False)
                 rule_evals = []
                 for rule in self.rules:
-                    rule_evals.append(rule(sample, result.model_dump(mode="json")))
+                    outcome = eval_rule_str(rule, result)
+                    rule_evals.append(outcome)
                 if all(rule_evals):
                     total_score += 1.0
             except Exception as e:
-                logger.info(e)
+                logger.exception(e)
             num_evals += 1.0
         return total_score / num_evals
 
@@ -426,6 +435,11 @@ class Task(BaseModel):
         else:
             _log("Optimization failed")
             return self
+
+    def sync_to(self, new_task: "Task"):
+        # Used to update self to optimized version
+        # TODO: Sync more attributes
+        self.desc = new_task.desc
 
 
 # TODO: Suggest prompts based on successful and unsuccessful examples
@@ -497,12 +511,10 @@ async def get_prompts(task: Task, num_prompts: int = 5) -> list[str]:
             # Current getsource only works with rules that do not have args i.e. takes in sample
             # For rules with args e.g. acai.rules.contains(haiku, "green") we probably need to
             # also pass the rule string
-            "rules": [inspect.getsource(i) for i in task.rules],
+            "rules": [get_rule_source(i) for i in task.rules],
             "num_prompts": num_prompts,
         }
-        result = await optim_task.run(**kwargs, optimize=False)
-        logger.info(kwargs)
-        logger.info(result.prompts)
+        result = await optim_task.arun(**kwargs, optimize=False)
         if not isinstance(result.prompts, str) and len(result.prompts) == num_prompts:
             break
 

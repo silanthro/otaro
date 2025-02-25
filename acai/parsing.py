@@ -1,14 +1,19 @@
+import logging
 import re
 from typing import Any
 
 import dirtyjson
 from dirtyjson.attributed_containers import AttributedDict, AttributedList
 
+logging.basicConfig()
+logger = logging.getLogger("acai.parsing")
+logger.setLevel(logging.INFO)
+
 
 def find_json(rgx: str, text: str):
     match = re.search(rgx, text)
     if match is None:
-        return None
+        return text
     else:
         return match.groupdict().get("json")
 
@@ -61,7 +66,12 @@ def llm_parse_json(text: str):
             except dirtyjson.error.Error:
                 pass
             try:
-                result_json = dirtyjson.loads(result.replace("None", "null"))
+                result = (
+                    result.replace("None", "null")
+                    .replace("True", "true")
+                    .replace("False", "false")
+                )
+                result_json = dirtyjson.loads(result)
                 return convert_attributed_container(result_json)
             except dirtyjson.error.Error:
                 continue

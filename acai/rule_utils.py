@@ -1,4 +1,5 @@
 import importlib
+import inspect
 import re
 
 from pydantic import BaseModel
@@ -22,7 +23,7 @@ number_arg = Word(nums) | Word(nums) + "." + Word(nums)
 boolean_arg = Literal("True") | Literal("False")
 
 array_item = string_arg | number_arg
-array_list = delimited_list(array_item)
+array_list = delimited_list(array_item, allow_trailing_delim=True)
 array_arg = Literal("[") + array_list + Literal("]")
 tuple_arg = Literal("(") + array_list + Literal(")")
 
@@ -33,33 +34,13 @@ arg_item = (arg_name + Literal("=").suppress() + arg_value) | arg_value
 arg_list = delimited_list(arg_item)
 
 
-# TODO: Parser should convert fields to their respective values
-def parse_action_value(string, location, tokens):
-    emit_tokens = []
-    if tokens[0] == "[":
-        # Arrays
-        emit_tokens = [eval("[" + ",".join(tokens[1:-1]) + "]")]
-    elif tokens[0] == "(":
-        # Tuples
-        emit_tokens = eval("(" + ",".join(tokens[1:-1]) + ")")
-    elif tokens[0].startswith('"') or tokens[0].startswith("'"):
-        # Quoted strings
-        print(tokens)
-        emit_tokens = tokens
+def get_value_parser(sample: BaseModel | None = None):
+    if sample is None:
+        sample_attrs = []
     else:
-        print("tt", [tokens])
-        print("\t", [tokens[0]])
-        emit_tokens = eval(tokens[0])
-    return emit_tokens
-
-
-arg_value.set_parse_action(parse_action_value)
-
-
-def get_value_parser(sample: BaseModel):
-    sample_attrs = list(
-        sample.model_dump(mode="json").keys()
-    )  # Note this does not support nested keys
+        sample_attrs = list(
+            sample.model_dump(mode="json").keys()
+        )  # Note this does not support nested keys
 
     def value_parser(string, location, tokens):
         key = None
@@ -77,7 +58,6 @@ def get_value_parser(sample: BaseModel):
             # Sample attributes
             emit_tokens = sample.model_dump(mode="json")[tokens[0]]
         elif len(tokens) > 2 and tokens[1] == "=":
-            print(tokens)
             # Kwarg
             key = tokens[0]
             emit_tokens = value_parser(None, None, tokens[2:])[1]
@@ -91,10 +71,13 @@ def get_value_parser(sample: BaseModel):
 
 
 # TODO: Supported nested inputs / outputs
-def process_signature(args_str: str, sample: BaseModel):
-    sample_attrs = list(
-        sample.model_dump(mode="json").keys()
-    )  # Note this does not support nested keys
+def process_signature(args_str: str, sample: BaseModel | None = None):
+    if sample is None:
+        sample_attrs = []
+    else:
+        sample_attrs = list(
+            sample.model_dump(mode="json").keys()
+        )  # Note this does not support nested keys
     field_arg = one_of(sample_attrs)
     arg_value = generic_arg_value | field_arg
     arg_item = (arg_name + Literal("=") + arg_value) | arg_value
@@ -114,11 +97,11 @@ def process_signature(args_str: str, sample: BaseModel):
 
 
 # TODO
-def validate_rule_str(rule_str: str, input_fields: list, output_fields: list):
-    raise NotImplementedError
+# def validate_rule_str(rule_str: str, input_fields: list, output_fields: list):
+#     raise NotImplementedError
 
 
-def eval_rule_str(rule_str: str, sample: BaseModel):
+def eval_rule_str(rule_str: str, sample: BaseModel | None = None):
     fn_pattern = re.compile(
         "^(?P<module>.*?)\\.(?P<fn>[a-zA-Z_]*?)(\\((?P<args>.*)\\))?$", re.DOTALL
     )
@@ -133,4 +116,19 @@ def eval_rule_str(rule_str: str, sample: BaseModel):
             args, kwargs = process_signature(args_str, sample)
             return fn(*args, **kwargs)
         return fn(sample)
+    raise ValueError(f"Invalid rule - {rule_str}")
+
+
+def get_rule_source(rule_str: str):
+    fn_pattern = re.compile(
+        "^(?P<module>.*?)\\.(?P<fn>[a-zA-Z_]*?)(\\((?P<args>.*)\\))?$", re.DOTALL
+    )
+    match = fn_pattern.match(rule_str.strip())
+    if match:
+        module_name = match.groupdict().get("module")
+        fn_name = match.groupdict().get("fn")
+        module = importlib.import_module(module_name)
+        fn = getattr(module, fn_name)
+        return f"Rule: {rule_str}\n{inspect.getsource(fn)}"
+
     raise ValueError(f"Invalid rule - {rule_str}")
