@@ -17,6 +17,6 @@ demos:
 
 rules:
   # Make sure that the haiku contains "green" and "blue"
-  - acai.rules.contains(haiku, "green")
+  - otaro.rules.contains(haiku, "green")
   - examples.custom_rules.haiku_contains_green # This does the same thing as the first rule
   - examples.custom_rules.haiku_contains_blue

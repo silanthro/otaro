@@ -6,7 +6,7 @@ import dirtyjson
 from dirtyjson.attributed_containers import AttributedDict, AttributedList
 
 logging.basicConfig()
-logger = logging.getLogger("acai.parsing")
+logger = logging.getLogger("otaro.parsing")
 logger.setLevel(logging.INFO)
 
 

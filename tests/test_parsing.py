@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from acai.parsing import llm_parse_json
+from otaro.parsing import llm_parse_json
 
 SAMPLE_DICT = {
     "foo": "bar",

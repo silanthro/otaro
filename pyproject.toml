@@ -1,6 +1,6 @@
 [project]
-name = "acai"
-version = "0.0.1"
+name = "otaro"
+version = "0.0.2"
 description = "Add your description here"
 readme = "README.md"
 authors = [
@@ -20,7 +20,7 @@ dependencies = [
 ]
 
 [project.scripts]
-acai = "acai.api:deploy"
+otaro = "otaro.api:deploy"
 
 [build-system]
 requires = ["hatchling"]

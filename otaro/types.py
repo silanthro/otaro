@@ -6,10 +6,10 @@ from typing import Union
 from pydantic import BaseModel, create_model
 from pydantic.fields import FieldInfo
 
-from acai.parsing import llm_parse_json
+from otaro.parsing import llm_parse_json
 
 logging.basicConfig()
-logger = logging.getLogger("acai.types")
+logger = logging.getLogger("otaro.types")
 logger.setLevel(logging.INFO)
 
 

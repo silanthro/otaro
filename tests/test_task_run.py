@@ -1,10 +1,10 @@
 import logging
 from pathlib import Path
 
-from acai.task import Task
+from otaro.task import Task
 
 logging.basicConfig()
-logger = logging.getLogger("acai.tests.test_task_run")
+logger = logging.getLogger("otaro.tests.test_task_run")
 logger.setLevel(logging.INFO)
 
 

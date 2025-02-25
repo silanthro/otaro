@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 
-from acai.task import Task
+from otaro.task import Task
 
 
 def main():

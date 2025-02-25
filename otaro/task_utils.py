@@ -1,7 +1,7 @@
 import logging
 
 logging.basicConfig()
-logger = logging.getLogger("acai.task_utils")
+logger = logging.getLogger("otaro.task_utils")
 logger.setLevel(logging.INFO)
 
 

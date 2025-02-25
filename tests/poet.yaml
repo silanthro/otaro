@@ -7,4 +7,4 @@ outputs:
     type: str
     
 rules:
-- acai.rules.contains(haiku, "frog")
+- otaro.rules.contains(haiku, "frog")

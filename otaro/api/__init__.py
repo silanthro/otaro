@@ -3,8 +3,8 @@ import uvicorn
 from pydantic import create_model
 from pydantic.fields import FieldInfo
 
-from acai.api.server import app
-from acai.task import Task
+from otaro.api.server import app
+from otaro.task import Task
 
 
 @click.command()

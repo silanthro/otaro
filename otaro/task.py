@@ -9,17 +9,17 @@ from pydantic import BaseModel, create_model
 from pydantic.fields import FieldInfo
 from tqdm import tqdm
 
-from acai.prompts import (
+from otaro.prompts import (
     SYSTEM_PROMPT,
     USER_PROMPT,
 )
-from acai.providers import APIModel
-from acai.rule_utils import eval_rule_str, get_rule_source
-from acai.task_utils import parse_fields_config
-from acai.types import Field
+from otaro.providers import APIModel
+from otaro.rule_utils import eval_rule_str, get_rule_source
+from otaro.task_utils import parse_fields_config
+from otaro.types import Field
 
 logging.basicConfig()
-logger = logging.getLogger("acai.task")
+logger = logging.getLogger("otaro.task")
 logger.setLevel(logging.INFO)
 
 
@@ -113,7 +113,7 @@ class Task(BaseModel):
         config["inputs"] = parse_fields_config(config.get("inputs", {}))
         config["outputs"] = parse_fields_config(config.get("outputs", {}))
         # rules = []
-        # module = importlib.import_module("acai.rules")
+        # module = importlib.import_module("otaro.rules")
         # for rule in config.get("rules", []):
         #     print(rule)
         #     fn_pattern = re.compile(
@@ -509,7 +509,7 @@ async def get_prompts(task: Task, num_prompts: int = 5) -> list[str]:
             "output_schemas": [str(i) for i in task.outputs],
             # TODO: Need to handle source different for rules with and without args
             # Current getsource only works with rules that do not have args i.e. takes in sample
-            # For rules with args e.g. acai.rules.contains(haiku, "green") we probably need to
+            # For rules with args e.g. otaro.rules.contains(haiku, "green") we probably need to
             # also pass the rule string
             "rules": [get_rule_source(i) for i in task.rules],
             "num_prompts": num_prompts,

@@ -1,4 +1,4 @@
-import acai.rules as rules
+import otaro.rules as rules
 
 TEST_STRING = "foobar"
 TEST_INT = 1
