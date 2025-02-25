@@ -70,7 +70,13 @@ class Field(BaseModel):
         elif self.type == FieldType.BOOL:
             return bool
         elif self.type == FieldType.ENUM:
-            return Enum(self.name, [(str(v), v) for v in self.enum_members])
+            return Enum(
+                self.name,
+                [(str(v), v) for v in self.enum_members],
+                type=type(
+                    self.enum_members[0]
+                ),  # Mix type of first member (assuming all members are same type)
+            )
         elif self.type == FieldType.LIST:
             return list[self.list_child_type.model]
         elif self.type == FieldType.OBJECT:
@@ -156,7 +162,7 @@ class Field(BaseModel):
         else:
             return f"[[ ## {self.name} ## ]]\n{json.dumps(value)}"
 
-    def parse(self, value: str):
+    def parse(self, value: str, to_dict=False):
         if self.type == FieldType.STR:
             return value
         elif self.type == FieldType.INT:
@@ -176,13 +182,24 @@ class Field(BaseModel):
                 return False
             return bool(value)
         elif self.type == FieldType.ENUM:
-            return self.model(value)
+            parsed_value = self.model(value)
+            if to_dict:
+                return parsed_value.value
+            else:
+                return parsed_value
         elif self.type == FieldType.LIST:
             value_json = llm_parse_json(value)
-            return [self.list_child_type.parse(json.dumps(c)) for c in value_json]
+            return [
+                self.list_child_type.parse(json.dumps(c), to_dict=to_dict)
+                for c in value_json
+            ]
         elif self.type == FieldType.OBJECT:
             value_json = llm_parse_json(value)
-            return self.model(**value_json)
+            parsed_value = self.model(**value_json)
+            if to_dict:
+                return parsed_value.model_dump(mode="json")
+            else:
+                return parsed_value
 
     def __call__(self, value):
         return self.parse(value)

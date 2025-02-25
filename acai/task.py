@@ -146,7 +146,7 @@ class Task(BaseModel):
                 if not optimized_config[attr]:
                     del optimized_config[attr]
         config.update(optimized_config)
-        logger.info(f"Config: {config}")
+        # logger.info(f"Config: {config}")
         return cls(config_file=str(config_file), **config)
 
     @property
@@ -324,10 +324,10 @@ class Task(BaseModel):
                     }
                     for k, v in match.groupdict().items():
                         if k == "reasoning":
-                            output_field = str
+                            groupdict[k] = str(v.strip())
                         else:
                             output_field = [o for o in self.outputs if o.name == k][0]
-                        groupdict[k] = output_field(v.strip())
+                            groupdict[k] = output_field.parse(v.strip(), to_dict=True)
                     result = model(**groupdict, **kwargs)
                 except Exception as e:
                     result = str(e)
