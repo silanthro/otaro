@@ -21,7 +21,7 @@ def deploy(config_file: str):
     )
 
     async def run(payload: PayloadClass):
-        return await task.run(optimize=False, **payload.model_dump(mode="json"))
+        return await task.arun(optimize=False, **payload.model_dump(mode="json"))
 
     app.add_api_route("/run", endpoint=run, methods=["POST"])
     uvicorn.run(app)

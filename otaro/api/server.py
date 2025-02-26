@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 load_dotenv()
 
 
-app = FastAPI()
+app = FastAPI(docs_url="/")
 origins = [
     "*",
     "http://0.0.0.0:8081",
@@ -19,10 +19,3 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-@app.get("/")
-def get_status():
-    return {
-        "status": "running",
-    }
