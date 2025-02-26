@@ -1,9 +1,5 @@
-from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-
-load_dotenv()
-
 
 app = FastAPI(docs_url="/")
 origins = [
