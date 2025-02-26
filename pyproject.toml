@@ -6,7 +6,7 @@ readme = "README.md"
 authors = [
     { name = "SK", email = "limsweekiat@gmail.com" }
 ]
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 dependencies = [
     "click>=8.1.8",
     "dirtyjson>=1.0.8",
