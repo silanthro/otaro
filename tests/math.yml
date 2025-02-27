@@ -1,13 +1,12 @@
 model: gemini/gemini-2.0-flash-001
 
 inputs:
-  equation:
+  - name: equation
     type: str
     desc: A simple equation
 
 outputs:
-  answer:
-    type: int
+  - answer: int
 
 demos:
   - equation: 1 + 1
