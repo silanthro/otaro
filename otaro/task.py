@@ -138,7 +138,7 @@ class Task(BaseModel):
         #     quit()
         # config["rules"] = rules
 
-        optimized_config_file = config_file.parent / (config_file.stem + ".optim.yaml")
+        optimized_config_file = config_file.parent / (config_file.stem + ".optim.yml")
         optimized_config = {}
         if optimized_config_file.exists():
             with open(optimized_config_file) as file:
@@ -291,7 +291,7 @@ class Task(BaseModel):
             )
         # TODO: Export more optimized params
         config_file = Path(self.config_file)
-        optimized_config_file = config_file.parent / (config_file.stem + ".optim.yaml")
+        optimized_config_file = config_file.parent / (config_file.stem + ".optim.yml")
         with open(optimized_config_file, "w") as file:
             yaml.safe_dump(
                 {

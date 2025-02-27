@@ -6,7 +6,7 @@ from otaro.task import Task
 
 def main():
     file_dir = Path(os.path.dirname(os.path.realpath(__file__)))
-    task = Task.from_config(file_dir / "planner.yaml")
+    task = Task.from_config(file_dir / "planner.yml")
     response = task.run(
         task="Search Google for news on AI and save it to a CSV", optimize=False
     )

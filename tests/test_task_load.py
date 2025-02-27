@@ -18,7 +18,7 @@ with open("./tests/nested_user_prompt.txt", "r") as file:
 
 
 def test_load_config():
-    task = Task.from_config("tests/math.yaml")
+    task = Task.from_config("tests/math.yml")
     assert task.desc == ""
     assert len(task.inputs) == 1
     assert len(task.outputs) == 1
@@ -27,7 +27,7 @@ def test_load_config():
 
 
 def test_load_nested():
-    task = Task.from_config("tests/nested.yaml")
+    task = Task.from_config("tests/nested.yml")
     system_prompt = task.prompt_template["messages"][0]["content"]
     # logger.info(system_prompt)
     dummy_input = task.dummy_input

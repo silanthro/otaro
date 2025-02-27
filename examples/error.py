@@ -6,7 +6,7 @@ from otaro.task import Task
 
 def main():
     file_dir = Path(os.path.dirname(os.path.realpath(__file__)))
-    config_file = file_dir / "error.yaml"
+    config_file = file_dir / "error.yml"
     task = Task.from_config(config_file)
     """
     First time the task is run, it should run into a formatting error
@@ -29,8 +29,8 @@ def main():
     Comment out lines below to view the optimized config with error
     correction
     """
-    optimized_config_file = file_dir / "error.optim.yaml"
-    optimized_config_file.unlink(missing_ok=True)
+    # optimized_config_file = file_dir / "error.optim.yml"
+    # optimized_config_file.unlink(missing_ok=True)
 
 
 if __name__ == "__main__":
