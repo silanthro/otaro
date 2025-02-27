@@ -335,15 +335,15 @@ class Task(BaseModel):
             yaml.safe_dump(
                 {
                     "desc": optimized_task.desc,
-                    "inputs": [
-                        i.model_dump(
-                            mode="python",
-                            exclude_defaults=True,
-                            exclude_none=True,
-                            exclude_unset=True,
-                        )
-                        for i in optimized_task.inputs
-                    ],
+                    # "inputs": [
+                    #     i.model_dump(
+                    #         mode="python",
+                    #         exclude_defaults=True,
+                    #         exclude_none=True,
+                    #         exclude_unset=True,
+                    #     )
+                    #     for i in optimized_task.inputs
+                    # ],
                 },
                 file,
                 default_flow_style=False,
