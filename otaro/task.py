@@ -15,7 +15,7 @@ from otaro.prompts import (
     USER_PROMPT,
 )
 from otaro.rule_utils import eval_rule_str, get_rule_source
-from otaro.task_utils import parse_fields_config
+from otaro.task_utils import parse_custom_types, parse_fields_config
 from otaro.types import Field, FieldParsingError
 
 logging.basicConfig()
@@ -27,6 +27,12 @@ class CompletionResponse(BaseModel):
     content: str
     num_input_tokens: int
     num_output_tokens: int
+
+
+class CommonError(BaseModel):
+    name: str
+    error_message: str
+    dummy_sample: str
 
 
 def count_tokens(
@@ -129,8 +135,16 @@ class Task(BaseModel):
         config_file = Path(config_file)
         with open(config_file) as file:
             config = yaml.safe_load(file)
-        config["inputs"] = parse_fields_config(config.get("inputs", {}))
-        config["outputs"] = parse_fields_config(config.get("outputs", {}))
+        custom_types = {}
+        if config.get("custom_types"):
+            custom_types = parse_custom_types(config.get("custom_types"))
+            del config["custom_types"]
+        config["inputs"] = parse_fields_config(
+            config.get("inputs", []), custom_types=custom_types
+        )
+        config["outputs"] = parse_fields_config(
+            config.get("outputs", []), custom_types=custom_types
+        )
         # rules = []
         # module = importlib.import_module("otaro.rules")
         # for rule in config.get("rules", []):
@@ -159,6 +173,15 @@ class Task(BaseModel):
         if optimized_config_file.exists():
             with open(optimized_config_file) as file:
                 optimized_config = yaml.safe_load(file) or {}
+            if optimized_config.get("inputs"):
+                optimized_config["inputs"] = parse_fields_config(
+                    optimized_config.get("inputs", []), custom_types=custom_types
+                )
+            if optimized_config.get("outputs"):
+                optimized_config["outputs"] = parse_fields_config(
+                    optimized_config.get("outputs", []), custom_types=custom_types
+                )
+
             # optimized_config = cls.from_config(optimized_config_file).model_dump(
             #     mode="json"
             # )
@@ -413,21 +436,7 @@ class Task(BaseModel):
                                 Field(
                                     name=common_error_field,
                                     desc="A previous error from another response.",
-                                    type="object",
-                                    object_attributes=[
-                                        {
-                                            "name": "field",
-                                            "type": "str",
-                                        },
-                                        {
-                                            "name": "error_message",
-                                            "type": "str",
-                                        },
-                                        {
-                                            "name": "dummy_sample",
-                                            "type": "str",
-                                        },
-                                    ],
+                                    type=CommonError,
                                     default={
                                         "field": e.field.name,
                                         "error_message": str(e),
@@ -435,7 +444,8 @@ class Task(BaseModel):
                                     },
                                 )
                             )
-                            self.create_optim_file(self)
+                            # TODO: Support optim export for common errors
+                            # self.create_optim_file(self)
                             matched_groups[e.field.name] = correction
 
                     # Optimize against rules
@@ -563,41 +573,25 @@ async def get_prompts(
             "task_description",
             Field(
                 name="input_schemas",
-                type="list",
-                list_child_type=Field(
-                    name="schema",
-                    type="str",
-                ),
+                type=list[str],
             ),
             Field(
                 name="output_schemas",
-                type="list",
-                list_child_type=Field(
-                    name="schema",
-                    type="str",
-                ),
+                type=list[str],
             ),
             Field(
                 name="rules",
-                type="list",
-                list_child_type=Field(
-                    name="rule",
-                    type="str",
-                ),
+                type=list[str],
             ),
             Field(
                 name="num_prompts",
-                type="int",
+                type=int,
             ),
         ],
         outputs=[
             Field(
                 name="prompts",
-                type="list",
-                list_child_type=Field(
-                    name="prompt",
-                    type="str",
-                ),
+                type=list[str],
             )
         ],
     )

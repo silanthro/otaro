@@ -1,5 +1,6 @@
 import importlib
 import inspect
+import logging
 import re
 
 from pydantic import BaseModel
@@ -13,6 +14,10 @@ from pyparsing import (
     nums,
     one_of,
 )
+
+logging.basicConfig()
+logger = logging.getLogger("otaro.rule_utils")
+logger.setLevel(logging.INFO)
 
 string_arg = QuotedString("'", esc_char="\\", unquote_results=False) | QuotedString(
     '"', esc_char="\\", unquote_results=False
