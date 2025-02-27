@@ -89,14 +89,16 @@ class Task(BaseModel):
     def __init__(
         self,
         model: str,
-        inputs: list[Field],
-        outputs: list[Field],
+        inputs: list[Field | str],
+        outputs: list[Field | str],
         desc: str = "",
         demos: list[dict] | None = None,
         rules: list[str] | None = None,
         config_file: str | None = None,
         **kwargs,
     ):
+        inputs = self.parse_fields(inputs)
+        outputs = self.parse_fields(outputs)
         super().__init__(
             model=model,
             inputs=inputs or [],
@@ -106,6 +108,20 @@ class Task(BaseModel):
             rules=rules or [],
             config_file=config_file,
         )
+
+    @staticmethod
+    def parse_fields(fields: list[Field | str] | None = None):
+        fields = fields or []
+        parsed_fields = []
+        for field in fields:
+            if isinstance(field, str):
+                field = Field(name=field)
+            elif isinstance(field, Field):
+                pass
+            else:
+                Field(**field)
+            parsed_fields.append(field)
+        return parsed_fields
 
     # TODO: Check for duplicate field name between inputs and outputs
     @classmethod
@@ -544,10 +560,7 @@ async def get_prompts(
             "Highlight if the task cannot be completed due to contradicting rules or incomplete task descriptions. "
         ),
         inputs=[
-            Field(
-                name="task_description",
-                type="str",
-            ),
+            "task_description",
             Field(
                 name="input_schemas",
                 type="list",
@@ -618,25 +631,11 @@ async def get_corrected_field(
     correction_task = Task(
         model=model,
         inputs=[
-            Field(
-                name="output_schema",
-                type="str",
-            ),
-            Field(
-                name="wrong_output",
-                type="str",
-            ),
-            Field(
-                name="error_message",
-                type="str",
-            ),
+            "output_schema",
+            "wrong_output",
+            "error_message",
         ],
-        outputs=[
-            Field(
-                name="correct_output",
-                type="str",
-            )
-        ],
+        outputs=["correct_output"],
     )
 
     max_tries = 3
