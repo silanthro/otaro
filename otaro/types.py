@@ -1,7 +1,7 @@
 import json
 import logging
 from enum import Enum
-from typing import Union
+from typing import Any, Union
 
 from pydantic import BaseModel, create_model
 from pydantic.fields import FieldInfo
@@ -23,19 +23,27 @@ class FieldType(str, Enum):
     OBJECT = "object"
 
 
+class FieldParsingError(Exception):
+    def __init__(self, message: str, field: "Field"):
+        super().__init__(message)
+        self.field = field
+
+
 class Field(BaseModel):
     name: str
-    type: FieldType
+    type: str
     desc: str = ""
-    enum_members: Union[list[str], None] = None
+    default: Any = None
+    enum_members: Union[list[str], None] = []
     list_child_type: Union["Field", None] = None
-    object_attributes: Union[list["Field"], None] = None
+    object_attributes: Union[list["Field"], None] = []
 
     def __init__(
         self,
         name: str,
         type: FieldType = FieldType.STR,
         desc: str = "",
+        default: Any = None,
         enum_members: Union[list[str], None] = None,
         list_child_type: Union["Field", None] = None,
         object_attributes: list["Field"] | None = None,
@@ -44,6 +52,7 @@ class Field(BaseModel):
             name=name,
             type=type,
             desc=desc,
+            default=default,
             enum_members=enum_members,
             list_child_type=list_child_type,
             object_attributes=object_attributes or [],
@@ -126,7 +135,8 @@ class Field(BaseModel):
         elif self.type == FieldType.ENUM:
             return self.enum_members[0]
         elif self.type == FieldType.LIST:
-            return [self.list_child_type.dummy_value]
+            # Dummy list with 2 items - TODO: consider using random length
+            return [self.list_child_type.dummy_value, self.list_child_type.dummy_value]
         elif self.type == FieldType.OBJECT:
             attribute_values = {}
             for attr in self.object_attributes:
@@ -188,14 +198,46 @@ class Field(BaseModel):
             else:
                 return parsed_value
         elif self.type == FieldType.LIST:
-            value_json = llm_parse_json(value)
-            return [
-                self.list_child_type.parse(json.dumps(c), to_dict=to_dict)
-                for c in value_json
-            ]
+            try:
+                value_json = llm_parse_json(value)
+            except ValueError as e:
+                raise FieldParsingError(
+                    f"Error parsing {self.name} with schema {self.schema} - invalid JSON",
+                    self,
+                ) from e
+
+            if not isinstance(value_json, list):
+                raise FieldParsingError(
+                    f"{json.dumps(value_json)} should be a list but is {type(value_json)}",
+                    self,
+                )
+            parsed_value = []
+            for i, child in enumerate(value_json):
+                try:
+                    parsed_value.append(
+                        self.list_child_type.parse(json.dumps(child), to_dict=to_dict)
+                    )
+                except Exception as e:
+                    raise FieldParsingError(
+                        f"Error parsing {self.name} with schema {self.schema} - Error parsing child at index {i} - {e}",
+                        self,
+                    ) from e
+            return parsed_value
         elif self.type == FieldType.OBJECT:
-            value_json = llm_parse_json(value)
-            parsed_value = self.model(**value_json)
+            try:
+                value_json = llm_parse_json(value)
+            except ValueError as e:
+                raise FieldParsingError(
+                    f"Error parsing {self.name} with schema {self.schema} - invalid JSON",
+                    self,
+                ) from e
+            try:
+                parsed_value = self.model(**value_json)
+            except Exception as e:
+                raise FieldParsingError(
+                    f"Error parsing {self.name} with schema {self.schema} - {e}",
+                    self,
+                ) from e
             if to_dict:
                 return parsed_value.model_dump(mode="json")
             else:
