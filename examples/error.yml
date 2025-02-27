@@ -4,17 +4,9 @@
 model: gpt-4o-mini-2024-07-18
 
 inputs:
-  topic:
-    type: str
+- topic
 
 outputs:
-  # quotes should be a nested array of strings e.g. [["foo"]]
-  # Convoluted example to trip up smaller LLMs
-  quotes:
-    type: list
-    list_child_type:
-      group:
-        type: list
-        list_child_type:
-          quote:
-            type: str
+# quotes should be a nested array of strings e.g. [["foo"]]
+# Convoluted example to trip up smaller LLMs
+- quotes: list[list[str]]

@@ -1,12 +1,10 @@
 model: gemini/gemini-2.0-flash-001
 
 inputs:
-  topic:
-    type: str
+- topic
 
 outputs:
-  haiku:
-    type: str
+- haiku
     
 rules:
 - otaro.rules.contains(haiku, "frog")

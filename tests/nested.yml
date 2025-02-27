@@ -1,52 +1,32 @@
 model: gemini/gemini-2.0-flash-001
 
+custom_types:
+  - Relative: {
+    name: str,
+    num_legs: int,
+  }
+  - Animal: {
+    name: str,
+    num_legs: int,
+    can_fly: bool,
+    parent: {
+      species: str,
+      can_fly: bool,
+    },
+    related_to: 'list[Relative]'
+  }
+
 inputs:
-  foo:
-    type: str
-  prime:
-    type: int
-  decimal:
-    type: float
-  fact:
-    type: bool
-  color:
-    type: enum
-    enum_members:
-      - red
-      - green
-      - blue
-  words:
-    type: list
-    list_child_type:
-      word:
-        type: str
-  animal:
-    type: object
-    object_attributes:
-      name:
-        type: str
-      num_legs:
-        type: int
-      can_fly:
-        type: bool
-      parent:
-        type: object
-        object_attributes:
-          species:
-            type: str
-          can_fly:
-            type: bool
-      related_to:
-        type: list
-        list_child_type:
-          relative:
-            type: object
-            object_attributes:
-              name:
-                type: str
-              num_legs:
-                type: int
+  - foo
+  - prime: int
+  - decimal: float
+  - fact: bool
+  - color:
+    - red
+    - green
+    - blue
+  - words: list[str]
+  - animal: Animal
 
 outputs:
-  result:
-    type: str
+  - result
