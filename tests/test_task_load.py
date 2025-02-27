@@ -1,6 +1,6 @@
 import logging
 
-from otaro.task import Task
+from otaro import Task
 
 logging.basicConfig()
 logger = logging.getLogger("otaro.tests.test_task_load")

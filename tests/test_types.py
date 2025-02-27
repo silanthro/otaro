@@ -1,4 +1,4 @@
-from otaro.types import Field
+from otaro import Field
 
 
 def test_simple_field_attributes():
