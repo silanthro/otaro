@@ -46,7 +46,7 @@ def parse_type_str(
             type_str[k] = (parse_type_str(k, v, custom_types), FieldInfo())
         return create_model(field_name, **type_str)
     else:
-        raise ValueError(f"Invalide type definition - {type_str}")
+        raise ValueError(f"Invalid type definition - {type_str}")
 
 
 # TODO: Provide more detailed error messages
