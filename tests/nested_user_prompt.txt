@@ -14,9 +14,9 @@ True
 red
 
 [[ ## words ## ]]
-["Foo"]
+["Foo", "Foo"]
 
 [[ ## animal ## ]]
-{"name": "Foo", "num_legs": 42, "can_fly": true, "parent": {"species": "Foo", "can_fly": true}, "related_to": [{"name": "Foo", "num_legs": 42}]}
+{"name": "Foo", "num_legs": 42, "can_fly": true, "parent": {"species": "Foo", "can_fly": true}, "related_to": [{"name": "Foo", "num_legs": 42}, {"name": "Foo", "num_legs": 42}]}
 
 Respond with the corresponding output fields reasoning, result, and then ending with the marker for `completed`.
