@@ -30,6 +30,15 @@ def get_schema(value_type: Type | GenericAlias):
         child_type = get_args(value_type)[0]
         if child_type in [str, int, float, bool] or issubclass(child_type, Enum):
             return f'{{"items": {get_schema(child_type)}, "type": "array"}}'
+        elif child_type == list or get_origin(child_type) == list:
+            child_schema = get_schema(child_type)
+            nesting = 0
+            while True:
+                if f"ListChild_{nesting}" in child_schema:
+                    nesting += 1
+                else:
+                    break
+            return f'{{"$defs": {{"ListChild_{nesting}": {child_schema}}}, "items": {{"$ref": "#/$defs/ListChild_{nesting}"}}, "type": "array"}}'
         else:
             return f'{{"$defs": {{"{child_type.__name__.capitalize()}": {get_schema(child_type)}}}, "items": {{"$ref": "#/$defs/{child_type.__name__.capitalize()}"}}, "type": "array"}}'
     elif issubclass(value_type, BaseModel):

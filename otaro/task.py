@@ -30,7 +30,7 @@ class CompletionResponse(BaseModel):
 
 
 class CommonError(BaseModel):
-    name: str
+    field: str
     error_message: str
     dummy_sample: str
 
@@ -415,6 +415,7 @@ class Task(BaseModel):
                             break
                         except FieldParsingError as e:
                             logger.exception(e)
+                            logger.info("Correcting error...")
                             # Get corrected field
                             correction = await get_corrected_field(
                                 field=e.field,
@@ -444,6 +445,7 @@ class Task(BaseModel):
                                     },
                                 )
                             )
+                            logger.info("Completed error correction")
                             # TODO: Support optim export for common errors
                             # self.create_optim_file(self)
                             matched_groups[e.field.name] = correction
