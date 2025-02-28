@@ -2,7 +2,7 @@ import json
 import logging
 from enum import Enum
 from types import GenericAlias
-from typing import Any, Type, Union, get_args, get_origin
+from typing import Any, Literal, Type, Union, get_args, get_origin
 
 from pydantic import BaseModel
 
@@ -22,6 +22,9 @@ class FieldParsingError(Exception):
 def get_schema(value_type: Type | GenericAlias):
     if value_type in [str, int, float, bool]:
         return value_type.__name__
+    elif get_origin(value_type) == Literal:
+        args = get_args(value_type)
+        return f'{{"enum": {json.dumps(args)}}}'
     elif issubclass(value_type, Enum):
         return f'{{"enum": {json.dumps(list(map(lambda c: c.name, value_type)))}}}'
     elif value_type == list:
@@ -54,6 +57,9 @@ def get_dummy_value(value_type: Type | GenericAlias):
         return 3.14
     elif value_type == bool:
         return True
+    elif get_origin(value_type) == Literal:
+        args = get_args(value_type)
+        return args[0]
     elif issubclass(value_type, Enum):
         return list(map(lambda c: c.name, value_type))[0]
     elif value_type == list:
@@ -68,6 +74,26 @@ def get_dummy_value(value_type: Type | GenericAlias):
         for attr_name, field_info in value_type.model_fields.items():
             attribute_values[attr_name] = get_dummy_value(field_info.annotation)
         return attribute_values
+
+
+def field_type_to_dict(field_type: Type):
+    if field_type in [str, int, float, bool]:
+        return field_type.__name__
+    elif get_origin(field_type) == Literal:
+        args = get_args(field_type)
+        return list(args)
+    elif issubclass(field_type, Enum):
+        return list(map(lambda c: c.name, field_type))
+    elif field_type == list:
+        return "list"
+    elif get_origin(field_type) == list:
+        child_type = get_args(field_type)[0]
+        return f"list[{field_type_to_dict(child_type)}]"
+    elif issubclass(field_type, BaseModel):
+        attrs = {}
+        for field_name, field_info in field_type.model_fields.items():
+            attrs[field_name] = field_type_to_dict(field_info.annotation)
+        return attrs
 
 
 def parse_string(value_type: Type | GenericAlias, value: str, to_dict: bool = False):
@@ -85,6 +111,11 @@ def parse_string(value_type: Type | GenericAlias, value: str, to_dict: bool = Fa
         ]:
             return False
         return bool(value)
+    elif get_origin(value_type) == Literal:
+        # Validate Literal
+        if value not in get_args(value_type):
+            raise ValueError(f"{value} not in {get_args(value_type)}")
+        return value
     elif issubclass(value_type, Enum):
         parsed_value = value_type(value)
         if to_dict:
@@ -175,6 +206,8 @@ class Field(BaseModel):
     def simple_schema(self):
         if self.type in [str, int, float, bool]:
             return self.type.__name__
+        elif get_origin(self.type) == Literal:
+            return "enum"
         elif issubclass(self.type, Enum):
             return "enum"
         elif self.type == list:
@@ -193,7 +226,7 @@ class Field(BaseModel):
         details = [
             self.desc + ("." if len(self.desc) and not self.desc.endswith(".") else "")
         ]
-        if issubclass(self.type, Enum):
+        if get_origin(self.type) == Literal or issubclass(self.type, Enum):
             details.append("Respond with one of the following enum values.")
             details.append(f"Enum Schema: {self.schema}")
         if (
@@ -232,3 +265,6 @@ class Field(BaseModel):
 
     def __call__(self, value):
         return self.parse(value)
+
+    def get_type_as_dict(self):
+        return field_type_to_dict(self.type)

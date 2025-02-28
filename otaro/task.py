@@ -331,10 +331,22 @@ class Task(BaseModel):
         # TODO: Export more optimized params
         config_file = Path(self.config_file)
         optimized_config_file = config_file.parent / (config_file.stem + ".optim.yml")
+        inputs_config = []
+        for field in optimized_task.inputs:
+            field_json = field.model_dump(
+                mode="python",
+                exclude=["type"],
+                exclude_defaults=True,
+                exclude_none=True,
+                exclude_unset=True,
+            )
+            field_json["type"] = field.get_type_as_dict()
+            inputs_config.append(field_json)
         with open(optimized_config_file, "w") as file:
             yaml.safe_dump(
                 {
                     "desc": optimized_task.desc,
+                    "inputs": inputs_config,
                     # "inputs": [
                     #     i.model_dump(
                     #         mode="python",
