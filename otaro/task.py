@@ -429,7 +429,7 @@ class Task(BaseModel):
                             logger.exception(e)
                             logger.info("Correcting error...")
                             # Get corrected field
-                            correction = await get_corrected_field(
+                            correction = await get_field_correction(
                                 field=e.field,
                                 model_response=match.groupdict()[e.field.name],
                                 error_message=str(e),
@@ -452,15 +452,15 @@ class Task(BaseModel):
                                     type=CommonError,
                                     default={
                                         "field": e.field.name,
-                                        "error_message": str(e),
+                                        "error_message": correction.dummy_error_message,
                                         "dummy_sample": json.dumps(e.field.dummy_value),
                                     },
                                 )
                             )
                             logger.info("Completed error correction")
                             # TODO: Support optim export for common errors
-                            # self.create_optim_file(self)
-                            matched_groups[e.field.name] = correction
+                            self.create_optim_file(self)
+                            matched_groups[e.field.name] = correction.correct_output
 
                     # Optimize against rules
                     evals = [False] * len(self.rules)
@@ -630,7 +630,7 @@ async def get_prompts(
     return result.prompts
 
 
-async def get_corrected_field(
+async def get_field_correction(
     field: Field,
     model_response: str,
     error_message: str,
@@ -642,8 +642,15 @@ async def get_corrected_field(
             "output_schema",
             "wrong_output",
             "error_message",
+            "correct_dummy_output",
         ],
-        outputs=["correct_output"],
+        outputs=[
+            "correct_output",
+            Field(
+                name="dummy_error_message",
+                desc="Rewrite error_message to replace user input info with dummy info",
+            ),
+        ],
     )
 
     max_tries = 3
@@ -652,7 +659,8 @@ async def get_corrected_field(
             "output_schema": str(field),
             "wrong_output": model_response,
             "error_message": error_message,
+            "correct_dummy_output": json.dumps(field.dummy_value),
         }
         result = await correction_task.arun(**kwargs, optimize=False)
 
-        return result.correct_output
+        return result
