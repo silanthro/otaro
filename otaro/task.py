@@ -32,7 +32,7 @@ class CompletionResponse(BaseModel):
 class CommonError(BaseModel):
     field: str
     error_message: str
-    dummy_sample: str
+    correct_dummy_sample: str
 
 
 def count_tokens(
@@ -453,7 +453,9 @@ class Task(BaseModel):
                                     default={
                                         "field": e.field.name,
                                         "error_message": correction.dummy_error_message,
-                                        "dummy_sample": json.dumps(e.field.dummy_value),
+                                        "correct_dummy_sample": json.dumps(
+                                            e.field.dummy_value
+                                        ),
                                     },
                                 )
                             )
