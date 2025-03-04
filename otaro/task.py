@@ -295,6 +295,9 @@ class Task(BaseModel):
         ]
 
         for demo_kwargs in self.demos:
+            for field in self.inputs:
+                if demo_kwargs.get(field.name) is None:
+                    demo_kwargs[field.name] = field.default
             demo_user_prompt = USER_PROMPT.format(
                 input_values="\n\n".join(
                     field.template(demo_kwargs[field.name]) for field in self.inputs
