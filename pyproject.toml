@@ -1,6 +1,6 @@
 [project]
 name = "otaro"
-version = "0.0.10"
+version = "0.0.11"
 description = "Auto-optimization of LLM tasks"
 readme = "README.md"
 authors = [
