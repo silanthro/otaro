@@ -29,7 +29,6 @@ def test_load_config():
 def test_load_nested():
     task = Task.from_config("tests/nested.yml")
     system_prompt = task.prompt_template["messages"][0]["content"]
-    # logger.info(system_prompt)
     dummy_input = task.dummy_input
     # logger.info(dummy_input)
     user_prompt = task.get_prompt(**dummy_input)["messages"][1]["content"]

@@ -2,25 +2,15 @@
 
 model: gemini/gemini-2.0-flash-001
 
+custom_types:
+- Step: {
+  number: int,
+  desc: str,
+  status: ['todo', 'pending', 'completed', 'failed']
+}
+
 inputs:
-  task:
-    type: str
+- task
 
 outputs:
-  plan:
-    type: list
-    list_child_type:
-      step:
-        type: object
-        object_attributes:
-          number:
-            type: int
-          desc:
-            type: str
-          status:
-            type: enum
-            enum_members:
-              - todo
-              - pending
-              - completed
-              - failed
+- plan: list[Step]

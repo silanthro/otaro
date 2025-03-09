@@ -3,22 +3,20 @@
 model: gemini/gemini-2.0-flash-001
 
 inputs:
-  topic:
-    type: str
+- topic
 
 outputs:
-  haiku:
-    type: str
+- haiku
 
 # Optional examples as demos
 demos:
-  - topic: "frog"
-    haiku: "Green skin, blue pond reflects,\nA croaking song fills the air,\nSummer's gentle kiss."
-  - topic: "penguin"
-    haiku: "Black and white they stand,\nGreen ice, blue ocean surround,\nWaddling, they dive deep."
+- topic: "frog"
+  haiku: "Green skin, blue pond reflects,\nA croaking song fills the air,\nSummer's gentle kiss."
+- topic: "penguin"
+  haiku: "Black and white they stand,\nGreen ice, blue ocean surround,\nWaddling, they dive deep."
 
 rules:
-  # Make sure that the haiku contains "green" and "blue"
-  - otaro.rules.contains(haiku, "green")
-  - examples.custom_rules.haiku_contains_green # This does the same thing as the first rule
-  - examples.custom_rules.haiku_contains_blue
+# Make sure that the haiku contains "green" and "blue"
+- otaro.rules.contains(haiku, "green")
+- examples.custom_rules.haiku_contains_green # This does the same thing as the first rule
+- examples.custom_rules.haiku_contains_blue

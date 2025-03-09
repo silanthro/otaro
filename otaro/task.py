@@ -15,7 +15,7 @@ from otaro.prompts import (
     USER_PROMPT,
 )
 from otaro.rule_utils import eval_rule_str, get_rule_source
-from otaro.task_utils import parse_fields_config
+from otaro.task_utils import parse_custom_types, parse_fields_config
 from otaro.types import Field, FieldParsingError
 
 logging.basicConfig()
@@ -27,6 +27,12 @@ class CompletionResponse(BaseModel):
     content: str
     num_input_tokens: int
     num_output_tokens: int
+
+
+class CommonError(BaseModel):
+    field: str
+    error_message: str
+    correct_dummy_sample: str
 
 
 def count_tokens(
@@ -129,36 +135,31 @@ class Task(BaseModel):
         config_file = Path(config_file)
         with open(config_file) as file:
             config = yaml.safe_load(file)
-        config["inputs"] = parse_fields_config(config.get("inputs", {}))
-        config["outputs"] = parse_fields_config(config.get("outputs", {}))
-        # rules = []
-        # module = importlib.import_module("otaro.rules")
-        # for rule in config.get("rules", []):
-        #     print(rule)
-        #     fn_pattern = re.compile(
-        #         "^(?P<module>.*?)\\.(?P<fn>.*?)(\\((?P<args>.*)\\))?$", re.DOTALL
-        #     )
-        #     match = fn_pattern.match(rule.strip())
-        #     if match:
-        #         print(match.groupdict())
-        #         args_str = match.groupdict().get("args")
-        #         if args_str:
-        #             args = process_signature(args_str)
-        #             print(args)
-        #         quit()
-        #         module_name = match.groupdict().get("module")
-        #         fn_name = match.groupdict().get("fn")
-        #         module = importlib.import_module(module_name)
-        #         fn = getattr(module, fn_name)
-        #         rules.append(fn)
-        #     quit()
-        # config["rules"] = rules
+        custom_types = {}
+        if config.get("custom_types"):
+            custom_types = parse_custom_types(config.get("custom_types"))
+            del config["custom_types"]
+        config["inputs"] = parse_fields_config(
+            config.get("inputs", []), custom_types=custom_types
+        )
+        config["outputs"] = parse_fields_config(
+            config.get("outputs", []), custom_types=custom_types
+        )
 
         optimized_config_file = config_file.parent / (config_file.stem + ".optim.yml")
         optimized_config = {}
         if optimized_config_file.exists():
             with open(optimized_config_file) as file:
                 optimized_config = yaml.safe_load(file) or {}
+            if optimized_config.get("inputs"):
+                optimized_config["inputs"] = parse_fields_config(
+                    optimized_config.get("inputs", []), custom_types=custom_types
+                )
+            if optimized_config.get("outputs"):
+                optimized_config["outputs"] = parse_fields_config(
+                    optimized_config.get("outputs", []), custom_types=custom_types
+                )
+
             # optimized_config = cls.from_config(optimized_config_file).model_dump(
             #     mode="json"
             # )
@@ -208,6 +209,7 @@ class Task(BaseModel):
 
         user_prompt = USER_PROMPT.format(
             input_values="\n\n".join(field.dummy_template for field in self.inputs),
+            task=self.desc,
             output_fields=", ".join(["reasoning"] + [f.name for f in self.outputs]),
         )
 
@@ -220,6 +222,7 @@ class Task(BaseModel):
                 input_values="\n\n".join(
                     field.template(demo_kwargs[field.name]) for field in self.inputs
                 ),
+                task=self.desc,
                 output_fields=", ".join(["reasoning"] + [f.name for f in self.outputs]),
             )
             demo_assistant_prompt = (
@@ -264,6 +267,7 @@ class Task(BaseModel):
             input_values="\n\n".join(
                 field.template(kwargs[field.name]) for field in self.inputs
             ),
+            task=self.desc,
             output_fields=", ".join(["reasoning"] + [f.name for f in self.outputs]),
         )
 
@@ -272,10 +276,14 @@ class Task(BaseModel):
         ]
 
         for demo_kwargs in self.demos:
+            for field in self.inputs:
+                if demo_kwargs.get(field.name) is None:
+                    demo_kwargs[field.name] = field.default
             demo_user_prompt = USER_PROMPT.format(
                 input_values="\n\n".join(
                     field.template(demo_kwargs[field.name]) for field in self.inputs
                 ),
+                task=self.desc,
                 output_fields=", ".join(["reasoning"] + [f.name for f in self.outputs]),
             )
             demo_assistant_prompt = (
@@ -308,25 +316,49 @@ class Task(BaseModel):
         # TODO: Export more optimized params
         config_file = Path(self.config_file)
         optimized_config_file = config_file.parent / (config_file.stem + ".optim.yml")
+        inputs_config = []
+        for field in optimized_task.inputs:
+            field_json = field.model_dump(
+                mode="python",
+                exclude=["type"],
+                exclude_defaults=True,
+                exclude_none=True,
+                exclude_unset=True,
+            )
+            field_json["type"] = field.get_type_as_dict()
+            inputs_config.append(field_json)
+        outputs_config = []
+        for field in optimized_task.outputs:
+            field_json = field.model_dump(
+                mode="python",
+                exclude=["type"],
+                exclude_defaults=True,
+                exclude_none=True,
+                exclude_unset=True,
+            )
+            field_json["type"] = field.get_type_as_dict()
+            outputs_config.append(field_json)
         with open(optimized_config_file, "w") as file:
             yaml.safe_dump(
                 {
                     "desc": optimized_task.desc,
-                    "inputs": [
-                        i.model_dump(
-                            mode="python",
-                            exclude_defaults=True,
-                            exclude_none=True,
-                            exclude_unset=True,
-                        )
-                        for i in optimized_task.inputs
-                    ],
+                    "inputs": inputs_config,
+                    "outputs": outputs_config,
+                    # "inputs": [
+                    #     i.model_dump(
+                    #         mode="python",
+                    #         exclude_defaults=True,
+                    #         exclude_none=True,
+                    #         exclude_unset=True,
+                    #     )
+                    #     for i in optimized_task.inputs
+                    # ],
                 },
                 file,
                 default_flow_style=False,
             )
 
-    async def arun(self, optimize=True, **kwargs):
+    async def arun(self, optimize=True, verbose=True, **kwargs):
         # TODO: Handle edge case where None is actually intended
         for field in self.inputs:
             if kwargs.get(field.name) is None:
@@ -339,7 +371,6 @@ class Task(BaseModel):
 
         for _ in range(num_tries):
             response = await _completion(model=self.model, messages=messages)
-            # logger.info(response.content)
 
             output_field_names = ["reasoning"] + [field.name for field in self.outputs]
             rgx_patterns = [
@@ -372,6 +403,9 @@ class Task(BaseModel):
                         num_output_tokens=(int, FieldInfo()),
                     )
                     matched_groups = match.groupdict()
+                    # logger.info(messages)
+                    # logger.info(matched_groups["reasoning"])
+                    # logger.info(matched_groups["tweets"])
                     groupdict = {
                         "num_input_tokens": response.num_input_tokens,
                         "num_output_tokens": response.num_output_tokens,
@@ -392,8 +426,9 @@ class Task(BaseModel):
                             break
                         except FieldParsingError as e:
                             logger.exception(e)
+                            logger.info("Correcting error...")
                             # Get corrected field
-                            correction = await get_corrected_field(
+                            correction = await get_field_correction(
                                 field=e.field,
                                 model_response=match.groupdict()[e.field.name],
                                 error_message=str(e),
@@ -413,71 +448,90 @@ class Task(BaseModel):
                                 Field(
                                     name=common_error_field,
                                     desc="A previous error from another response.",
-                                    type="object",
-                                    object_attributes=[
-                                        {
-                                            "name": "field",
-                                            "type": "str",
-                                        },
-                                        {
-                                            "name": "error_message",
-                                            "type": "str",
-                                        },
-                                        {
-                                            "name": "dummy_sample",
-                                            "type": "str",
-                                        },
-                                    ],
+                                    type=CommonError,
                                     default={
                                         "field": e.field.name,
-                                        "error_message": str(e),
-                                        "dummy_sample": json.dumps(e.field.dummy_value),
+                                        "error_message": correction.dummy_error_message,
+                                        "correct_dummy_sample": json.dumps(
+                                            e.field.dummy_value
+                                        ),
                                     },
                                 )
                             )
+                            logger.info("Completed error correction")
+                            # TODO: Support optim export for common errors
                             self.create_optim_file(self)
-                            matched_groups[e.field.name] = correction
+                            matched_groups[e.field.name] = correction.correct_output
 
                     # Optimize against rules
                     evals = [False] * len(self.rules)
                     if len(self.rules):
-                        logger.info("Evaluating rules")
+                        if verbose:
+                            logger.info("Evaluating rules")
                         for i, rule in enumerate(self.rules, 1):
                             outcome = eval_rule_str(rule, result)
-                            logger.info(f"Rule {i}: {rule} - {outcome}")
+                            if verbose:
+                                logger.info(f"Rule {i}: {rule} - {outcome}")
                             evals[i - 1] = outcome
 
-                    if optimize and self.config_file and len(self.rules):
-                        if not all(evals):
-                            new_task = await self.optimize([kwargs], num_prompts=1)
+                    if not all(evals):
+                        # Optimize if possible
+                        if optimize and self.config_file:
+                            new_task, best_results = await self.optimize(
+                                [kwargs], num_prompts=3
+                            )
                             self.create_optim_file(new_task)
                             # Update to optimized task
                             self.sync_to(new_task)
-                            result = await self.arun(**kwargs, optimize=False)
+                            result = best_results
+
                     return result
                 except Exception as e:
                     logger.exception(e)
                     logger.info("Retrying...")
         raise ValueError("Unable to generate valid response")
 
-    async def evaluate(self, data: list):
-        total_score = 0
+    def evaluate(self, data: list, verbose=False):
+        loop = asyncio.get_event_loop()
+        return loop.run_until_complete(self.aevaluate(data, verbose))
+
+    async def aevaluate(self, data: list, verbose=False):
         num_evals = 0
+        results = []
+        scores = []
+        best_score = 0
+        best_result = None
         for sample in tqdm(data):
             try:
-                result = await self.arun(**sample, optimize=False)
+                result = await self.arun(**sample, optimize=False, verbose=verbose)
                 rule_evals = []
                 for rule in self.rules:
                     outcome = eval_rule_str(rule, result)
                     rule_evals.append(outcome)
-                if all(rule_evals):
-                    total_score += 1.0
+                # Assume rule_evals is list[bool]
+                # TODO: Handle other cases
+                score = sum(rule_evals) / len(rule_evals)
+                scores.append(score)
+                results.append(result)
+                if score > best_score:
+                    best_result = result
+                    best_score = score
             except Exception as e:
                 logger.exception(e)
             num_evals += 1.0
-        return total_score / num_evals
+        if len(scores) == 0:
+            return 0, None
+        else:
+            return sum(scores) / len(scores), best_result
 
-    async def optimize(self, data: list, say=None, num_prompts=5):
+    async def optimize(
+        self,
+        data: list,
+        say=None,
+        num_prompts=5,
+        trials_per_prompt=1,
+        terminate_asap=True,
+    ):
         def _log(message: str):
             if say:
                 say(message)
@@ -486,49 +540,59 @@ class Task(BaseModel):
         _log("Optimizing task...")
 
         # Run initial evaluation with rules to determine success rate
-        initial_score = await self.evaluate(data)
+        initial_score, best_initial_result = await self.aevaluate(
+            data * trials_per_prompt
+        )
         _log(f"Initial score: {initial_score}")
 
         # Get prompts
-        prompts = await get_prompts(self, num_prompts=num_prompts)
+        suggestions = await get_prompts(self, num_prompts=num_prompts)
 
         # For each prompt, run evaluation
         # TODO: Add prompt-demo combination
-        scores = []
-        for prompt in prompts:
+        variant_scores = []
+        variant_results = []
+        variants = []
+        for prompt in suggestions.task_prompts:
             _log(f"Evaluating prompt: {prompt}")
             task_variant = self.model_copy(deep=True)
             task_variant.desc = prompt
-            score = await task_variant.evaluate(data)
-            scores.append(score)
+            for field in task_variant.outputs:
+                field.desc = suggestions.model_dump().get(f"{field.name}_desc_rules")
+            score, best_result = await task_variant.aevaluate(data * trials_per_prompt)
+            variant_scores.append(score)
+            variant_results.append(best_result)
+            variants.append(task_variant)
             _log(f"\tScore: {score}")
-            _log(f"All scores: {[initial_score] + scores}")
+            _log(f"All scores: {[initial_score] + variant_scores}")
+            # Terminate once a prompt that fulfills all rules is found
+            if terminate_asap and score == 1.0:
+                break
 
         # Select best parameters
-        if max(scores) >= initial_score:
-            all_scores = [initial_score] + scores
-            all_prompts = [self.desc] + prompts
+        if max(variant_scores) >= initial_score:
+            all_scores = [initial_score] + variant_scores
+            all_results = [best_initial_result] + variant_results
+            all_variants = [self] + variants
 
             # Select best-performing prompt that is the shortest
             best_idxs = [
                 i for i, score in enumerate(all_scores) if score >= max(all_scores)
             ]
-            best_prompts = [all_prompts[i] for i in best_idxs]
-            prompt_lengths = [count_tokens(p) for p in best_prompts]
+            best_variants = [all_variants[i] for i in best_idxs]
+            prompt_lengths = [count_tokens(t.desc) for t in best_variants]
             shortest_idxs = [
                 i
                 for i, length in enumerate(prompt_lengths)
                 if length <= min(prompt_lengths)
             ]
-            best_prompt = best_prompts[shortest_idxs[0]]
-            best_idx = all_prompts.index(best_prompt)
+            best_variant = best_variants[shortest_idxs[0]]
+            best_idx = all_variants.index(best_variant)
             _log(f"Selecting prompt #{best_idx} with score {all_scores[best_idx]}")
-            task_variant = self.model_copy(deep=True)
-            task_variant.desc = best_prompt
-            return task_variant
+            return best_variant, all_results[best_idx]
         else:
             _log("Optimization failed")
-            return self
+            return self, best_initial_result
 
     def sync_to(self, new_task: "Task"):
         # Used to update self to optimized version
@@ -546,7 +610,7 @@ class Task(BaseModel):
 # TODO: Suggest prompts based on successful and unsuccessful examples
 async def get_prompts(
     task: Task, model: str | None = None, num_prompts: int = 5
-) -> list[str]:
+) -> BaseModel:
     optim_task = Task(
         model=model or task.model,
         desc=(
@@ -563,42 +627,33 @@ async def get_prompts(
             "task_description",
             Field(
                 name="input_schemas",
-                type="list",
-                list_child_type=Field(
-                    name="schema",
-                    type="str",
-                ),
+                type=list[str],
             ),
             Field(
                 name="output_schemas",
-                type="list",
-                list_child_type=Field(
-                    name="schema",
-                    type="str",
-                ),
+                type=list[str],
             ),
             Field(
                 name="rules",
-                type="list",
-                list_child_type=Field(
-                    name="rule",
-                    type="str",
-                ),
+                type=list[str],
             ),
             Field(
                 name="num_prompts",
-                type="int",
+                type=int,
             ),
         ],
         outputs=[
             Field(
-                name="prompts",
-                type="list",
-                list_child_type=Field(
-                    name="prompt",
-                    type="str",
-                ),
-            )
+                name="task_prompts",
+                type=list[str],
+            ),
+            *[
+                Field(
+                    name=f"{f.name}_desc_rules",
+                    desc="A description for the field and any relevant rules. Exclude JSON format.",
+                )
+                for f in task.outputs
+            ],
         ],
     )
 
@@ -616,13 +671,15 @@ async def get_prompts(
             "num_prompts": num_prompts,
         }
         result = await optim_task.arun(**kwargs, optimize=False)
-        if not isinstance(result.prompts, str) and len(result.prompts) == num_prompts:
+        if (
+            not isinstance(result.task_prompts, str)
+            and len(result.task_prompts) == num_prompts
+        ):
             break
+    return result
 
-    return result.prompts
 
-
-async def get_corrected_field(
+async def get_field_correction(
     field: Field,
     model_response: str,
     error_message: str,
@@ -634,8 +691,15 @@ async def get_corrected_field(
             "output_schema",
             "wrong_output",
             "error_message",
+            "correct_dummy_output",
         ],
-        outputs=["correct_output"],
+        outputs=[
+            "correct_output",
+            Field(
+                name="dummy_error_message",
+                desc="Rewrite error_message to replace user input info with dummy info",
+            ),
+        ],
     )
 
     max_tries = 3
@@ -644,7 +708,8 @@ async def get_corrected_field(
             "output_schema": str(field),
             "wrong_output": model_response,
             "error_message": error_message,
+            "correct_dummy_output": json.dumps(field.dummy_value),
         }
         result = await correction_task.arun(**kwargs, optimize=False)
 
-        return result.correct_output
+        return result
