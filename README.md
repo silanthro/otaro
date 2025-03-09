@@ -1,5 +1,11 @@
 # otaro
 
+```
+uv add otaro
+```
+
+Documentation: https://silanthro.github.io/otaro
+
 ## Example
 
 Create a config YAML file to describe the task.
@@ -20,7 +26,7 @@ outputs:
 from otaro import Task
 
 task = Task.from_config("poet.yml")
-response = task.run(topic="lion")
+response = task.run(topic="frog")
 print(response.haiku)
 
 """
