@@ -1,10 +1,10 @@
 [project]
 name = "otaro"
-version = "0.0.6"
-description = "Add your description here"
+version = "0.0.10"
+description = "Auto-optimization of LLM tasks"
 readme = "README.md"
 authors = [
-    { name = "SK", email = "limsweekiat@gmail.com" }
+    { name = "Silanthro" }
 ]
 requires-python = ">=3.9"
 dependencies = [
