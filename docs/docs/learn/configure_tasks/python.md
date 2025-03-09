@@ -10,12 +10,14 @@ from otaro import Field, Task
 # Define a task that takes a topic and returns a list of quotes
 task = Task(
     model="gemini/gemini-2.0-flash-001",
-    inputs=["topic"],
+    inputs=[
+        "topic", # same as Field(name="topic", type=str)
+    ],
     outputs=[
         Field(
             name="quotes",
-            type="list",
-            list_child_type="str",
+            type=list[str],
+            # type takes native Python types or Pydantic BaseModel classes
         )
     ],
 )
@@ -48,13 +50,11 @@ At minimum, a `Task` needs to be initialized with:
 
 A `Field` is used to specify the type of output that the LLM is supposed to generate.
 
-```
-TODO: Accept base classes and BaseModel types for type argument
-```
+The `Field` definitions will also be used to parse the LLM response and return an output with attributes of the correct types.
 
-The `Field` definitions will also be used to parse the LLM response and return an output with attributes of the correct types e.g. `response.quotes` is of type `list[str]` above.
+For instance, in the above example, `response.quotes` will be of type `list[str]`.
 
-For convenience, a `Field` can also be defined with a single string, which will be interpreted as the field name and have default attributes e.g. `type="str"`. For example, `inputs` is set as `["topic"]` in `quickstart.py` above.
+For convenience, a `Field` can also be defined with a single string, which will be interpreted as the field name and default to `#!python type=str`. For example, `inputs` is set as `["topic"]` in `quickstart.py` above.
 
 ## Adding rules
 
@@ -72,8 +72,7 @@ task = Task(
     outputs=[
         Field(
             name="quotes",
-            type="list",
-            list_child_type="str",
+            type=list[str],
         )
     ],
     # Add rule to enforce len(quotes) == 3
@@ -88,6 +87,8 @@ for quote in response.quotes:
 ```
 
 Running the script will automatically optimize the task to output three quotes.
+
+Note: The optimized config will only be saved for future use if the task was loaded via YAML. See [Configure a task in YAML](yaml.md) for more details.
 
 <!-- termynal -->
 

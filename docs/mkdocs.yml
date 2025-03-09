@@ -69,9 +69,6 @@ plugins:
             - griffe_typingdoc
             show_root_heading: true
             show_if_no_docstring: true
-            # preload_modules:
-            # - httpx
-            # - starlette
             inherited_members: true
             members_order: source
             separate_signature: true
@@ -86,14 +83,17 @@ plugins:
 
 nav:
 - Otaro: index.md
-- features.md
 - Learn:
-  - learn/index.md
   - Configure tasks:
     - learn/configure_tasks/yaml.md
     - learn/configure_tasks/python.md
+  - learn/optimize_prompt.md
+  - learn/access_prompt.md
+  - learn/deploy_config.md
 - Reference:
+  - reference/index.md
   - reference/task.md
+  - reference/field.md
 
 markdown_extensions:
   # Python Markdown

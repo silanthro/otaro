@@ -1,18 +1,18 @@
 # Otaro
 
-Otaro builds on previous work for programming language models, such as DSPy and Ell.
+Otaro builds on previous work for programming language models, such as [DSPy](https://dspy.ai/) and [Ell](https://docs.ell.so/).
 
 Highlights:
 
-- **Readable shareable configs**: Define tasks and agents via YAML config (or code)
-- **Automatic learning**: Configs are automatically optimized under the hood without explicit examples
+- **Configs built for sharing and readability**: Define tasks and agents via YAML config or code
+- **Automatic learning**: Configs are optimized under the hood without explicit examples
 - **Built-in deployment**: Quickly deploy a task via `otaro config.yml` with OpenAPI support
 - **Smart parsing**: Parse LLM outputs in a noise-resistant manner with error correction
 
 ## Usage
 
-```
-pip install otaro
+```bash
+uv add otaro
 ```
 
 ### Example
@@ -25,12 +25,10 @@ Create a YAML config file:
 model: gemini/gemini-2.0-flash-001
 
 inputs:
-  topic:
-    type: str
+- topic
 
 outputs:
-  haiku:
-    type: str
+- haiku
 ```
 
 And a Python script that loads the config.
@@ -50,12 +48,12 @@ Then either run the python script:
 ```console
 $ uv run poet.py
 
-Green skin, blue pond reflects,
+Green skin on blue pond,
 A croaking song fills the air,
 Summer's gentle kiss.
 ```
 
-Or host the config as an API with interactive OpenAPI docs available at `http://127.0.0.1:8000`.
+Or host the config as an API with interactive OpenAPI docs available at `http://127.0.0.1:8000` for testing.
 
 <!-- termynal -->
 

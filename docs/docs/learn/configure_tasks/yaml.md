@@ -2,6 +2,8 @@
 
 A `Task` is the basic building block in Otaro. Similar to DSPy, Otaro treats LLM calls like functions with inputs and outputs.
 
+When the config is specified via a YAML file, any [config optimizations](#adding-rules) will be saved in `<config_name>.optim.yml` and automatically loaded in future requests. In addition, a YAML config can also be [deployed as an API](../deploy_config.md).
+
 ## Quickstart
 
 ```yaml title="quickstart.yml"
@@ -10,19 +12,14 @@ A `Task` is the basic building block in Otaro. Similar to DSPy, Otaro treats LLM
 model: gemini/gemini-2.0-flash-001
 
 inputs:
-  topic:
-    type: str
+- topic # If no type is specified, defaults to str
 
 outputs:
-  quotes:
-    type: list
-    list_child_type:
-      quote:
-        type: str
+- quotes: list[str]
 ```
 
 ```py title="quickstart.py"
-from otaro import Field, Task
+from otaro import Task
 
 # Define a task that takes a topic and returns a list of quotes
 task = Task.from_config("quickstart.yml")
@@ -45,29 +42,26 @@ Words in the heart cannot be taken.
 
 ## Adding rules
 
-Instead of trying to figure out the best prompt, define the desired output with `rules`. Then, whenever `task.run` is called, the task will be automatically optimized to enforce the rules where possible.
+Instead of trying to manually optimize prompts, define the desired output with `rules`.
 
-For illustration, rewrite the task above to enforce 3 quotes:
+Whenever `task.run` is called, the config will be automatically optimized to enforce the rules where possible.
 
-```yaml title="quickstart.yml" hl_lines="16-18"
+For example, we can add a rule to the task above that enforces 3 quotes:
+
+```yaml title="quickstart.yml" hl_lines="11-13"
 # Define a task that takes a topic and returns a list of quotes
 
 model: gemini/gemini-2.0-flash-001
 
 inputs:
-  topic:
-    type: str
+- topic
 
 outputs:
-  quotes:
-    type: list
-    list_child_type:
-      quote:
-        type: str
+- quotes: list[str]
 
 # Add rule to enforce len(quotes) == 3
 rules:
-  - otaro.rules.length_eq(quotes, 3)
+- otaro.rules.length_eq(quotes, 3)
 ```
 
 Running the script will automatically optimize the task to output three quotes.
@@ -94,9 +88,11 @@ In ancient times cats were worshipped as gods; they have not forgotten this.
 Wisdom comes from experience. Experience is often a result of lack of wisdom.
 ```
 
+The optimized config will be saved as `<config_name>.optim.yml` and will automatically be loaded whenever the original config is used in the future.
+
 ## Adding custom rules
 
-Custom rules can be defined as functions in a Python file and then referenced within the YAML config.
+Custom rules can also be defined as functions in a Python file and then referenced within the YAML config.
 
 For example, suppose we want all the quotes to be in uppercase.
 
@@ -111,19 +107,14 @@ def quotes_are_uppercase(sample):
 model: gemini/gemini-2.0-flash-001
 
 inputs:
-  topic:
-    type: str
+- topic
 
 outputs:
-  quotes:
-    type: list
-    list_child_type:
-      quote:
-        type: str
+- quotes: list[str]
 
 # Add custom uppercase rule
 rules:
-  - custom_rules.quotes_are_uppercase
+- custom_rules.quotes_are_uppercase
 ```
 
 Then we simply run the same script:
